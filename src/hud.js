@@ -4,6 +4,7 @@ import { PAL, RAMP, W, H } from './config.js';
 import { player } from './player.js';
 import { getRoomState } from './rooms.js';
 import { getGlobalTime } from './main.js';
+import { drawSprite, isSpritesLoaded } from './sprites.js';
 
 // ============================================================
 // PIXEL ART HEART (7x6 grid for more detail, 3-frame pulse)
@@ -162,14 +163,29 @@ export function drawHUD(ctx) {
     else if (pulsePhase === 1) heartScale = 1.8;
     else heartScale = 2.0;
   }
-  const heartColor = lowHp ? "#ff3333" : PAL.hpBar;
-  const heartHighlight = lowHp ? "#ff8888" : "#ff6666";
-  drawPixelHeart(ctx, 15, 15, heartScale, heartColor, heartHighlight);
-  // Low HP glow
-  if (lowHp) {
-    ctx.globalAlpha = 0.2 + Math.sin(globalTime * 6) * 0.15;
-    drawPixelHeart(ctx, 15, 15, heartScale, "#ff6666", "#ffaaaa");
-    ctx.globalAlpha = 1;
+
+  // Use sprite heart if available
+  if (isSpritesLoaded()) {
+    const hpRatio = player.hp / player.maxHp;
+    let heartSprite = 'ui_heart_full';
+    if (hpRatio <= 0) heartSprite = 'ui_heart_empty';
+    else if (hpRatio < 0.5) heartSprite = 'ui_heart_half';
+    const sprScale = lowHp ? heartScale * 0.8 : 1.6;
+    drawSprite(ctx, heartSprite, 'idle', 0, 24, 24, false, sprScale);
+    if (lowHp) {
+      ctx.globalAlpha = 0.3 + Math.sin(globalTime * 6) * 0.2;
+      drawSprite(ctx, heartSprite, 'idle', 0, 24, 24, false, sprScale);
+      ctx.globalAlpha = 1;
+    }
+  } else {
+    const heartColor = lowHp ? "#ff3333" : PAL.hpBar;
+    const heartHighlight = lowHp ? "#ff8888" : "#ff6666";
+    drawPixelHeart(ctx, 15, 15, heartScale, heartColor, heartHighlight);
+    if (lowHp) {
+      ctx.globalAlpha = 0.2 + Math.sin(globalTime * 6) * 0.15;
+      drawPixelHeart(ctx, 15, 15, heartScale, "#ff6666", "#ffaaaa");
+      ctx.globalAlpha = 1;
+    }
   }
 
   // Health bar: segmented with shine highlight strip

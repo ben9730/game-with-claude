@@ -2,6 +2,7 @@
 
 import { PAL } from './config.js';
 import { getRoomState } from './rooms.js';
+import { drawSprite, isSpritesLoaded, drawEntityGlow } from './sprites.js';
 
 export function updatePowerups(dt) {
   const { powerups } = getRoomState();
@@ -45,8 +46,13 @@ export function drawPowerups(ctx) {
     }
     ctx.globalAlpha = 1;
 
-    // Potion bottle shape
-    if (pu.type === "health") {
+    // Use sprite flask if loaded, otherwise fall back to procedural
+    if (isSpritesLoaded()) {
+      const spriteMap = { health: 'flask_red', speed: 'flask_blue', attack: 'flask_yellow' };
+      const glowMap = { health: '#ff4444', speed: '#4488ff', attack: '#ffaa33' };
+      drawEntityGlow(ctx, px, py, 16, glowMap[pu.type], glow * 0.3);
+      drawSprite(ctx, spriteMap[pu.type], 'idle', 0, px, py, false, 3);
+    } else if (pu.type === "health") {
       // Bottle
       ctx.fillStyle = "#8a2222";
       ctx.fillRect(px - 4, py - 2, 8, 8);

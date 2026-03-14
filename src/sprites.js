@@ -18,7 +18,8 @@ const SPRITE_DEFS = {
     run: { frames: 4, prefix: 'imp_run_anim_f', speed: 0.1 },
   },
   skeleton: {
-    idle: { frames: 4, prefix: 'necromancer_anim_f', speed: 0.2 },
+    idle: { frames: 4, prefix: 'skelet_idle_anim_f', speed: 0.2 },
+    run: { frames: 4, prefix: 'skelet_run_anim_f', speed: 0.12 },
   },
   boss: {
     idle: { frames: 4, prefix: 'big_demon_idle_anim_f', speed: 0.15 },
@@ -26,6 +27,24 @@ const SPRITE_DEFS = {
   },
   weapon_sword: {
     idle: { frames: 1, prefix: 'weapon_knight_sword', speed: 1, noIndex: true },
+  },
+  flask_red: {
+    idle: { frames: 1, prefix: 'flask_big_red', speed: 1, noIndex: true },
+  },
+  flask_blue: {
+    idle: { frames: 1, prefix: 'flask_big_blue', speed: 1, noIndex: true },
+  },
+  flask_yellow: {
+    idle: { frames: 1, prefix: 'flask_big_yellow', speed: 1, noIndex: true },
+  },
+  ui_heart_full: {
+    idle: { frames: 1, prefix: 'ui_heart_full', speed: 1, noIndex: true },
+  },
+  ui_heart_half: {
+    idle: { frames: 1, prefix: 'ui_heart_half', speed: 1, noIndex: true },
+  },
+  ui_heart_empty: {
+    idle: { frames: 1, prefix: 'ui_heart_empty', speed: 1, noIndex: true },
   },
 };
 
@@ -74,6 +93,9 @@ export function loadAllSprites() {
       }
     }
   }
+  // Also load tile images
+  promises.push(loadTileImages());
+
   return Promise.all(promises);
 }
 
@@ -161,6 +183,85 @@ export function drawSpriteWithGlow(ctx, spriteName, animName, time, x, y, flipH,
   ctx.drawImage(img, dx, dy, w, h);
   ctx.imageSmoothingEnabled = true;
   return true;
+}
+
+// ============================================================
+// TILE IMAGE LOADING (floor, wall, door, decoration tiles)
+// ============================================================
+const TILE_FILES = {
+  floors: ['floor_1.png', 'floor_2.png', 'floor_3.png', 'floor_4.png', 'floor_5.png', 'floor_6.png', 'floor_7.png', 'floor_8.png'],
+  wall_mid: 'wall_mid.png',
+  wall_left: 'wall_left.png',
+  wall_right: 'wall_right.png',
+  wall_top_mid: 'wall_top_mid.png',
+  wall_top_left: 'wall_top_left.png',
+  wall_top_right: 'wall_top_right.png',
+  edge_down: 'edge_down.png',
+  // Wall decorations
+  wall_banner_red: 'wall_banner_red.png',
+  wall_banner_blue: 'wall_banner_blue.png',
+  wall_banner_green: 'wall_banner_green.png',
+  wall_hole_1: 'wall_hole_1.png',
+  wall_hole_2: 'wall_hole_2.png',
+  wall_goo: 'wall_goo.png',
+  wall_goo_base: 'wall_goo_base.png',
+  // Props
+  column: 'column.png',
+  skull: 'skull.png',
+  crate: 'crate.png',
+  // Door
+  doors_leaf_closed: 'doors_leaf_closed.png',
+  doors_leaf_open: 'doors_leaf_open.png',
+  doors_frame_left: 'doors_frame_left.png',
+  doors_frame_right: 'doors_frame_right.png',
+  doors_frame_top: 'doors_frame_top.png',
+};
+
+const tileImageCache = new Map();
+let tilesLoaded = false;
+
+export function isTilesLoaded() { return tilesLoaded; }
+
+export function getTileImage(name) {
+  return tileImageCache.get(name) || null;
+}
+
+export function loadTileImages() {
+  const promises = [];
+  const allFiles = {};
+
+  // Collect floor files
+  for (const floorFile of TILE_FILES.floors) {
+    const name = floorFile.replace('.png', '');
+    allFiles[name] = floorFile;
+  }
+
+  // Collect all other tile files
+  for (const [key, val] of Object.entries(TILE_FILES)) {
+    if (key === 'floors') continue;
+    allFiles[key] = val;
+  }
+
+  for (const [name, filename] of Object.entries(allFiles)) {
+    const img = new Image();
+    img.src = SPRITE_BASE + filename;
+    const p = new Promise((resolve) => {
+      img.onload = () => {
+        tileImageCache.set(name, img);
+        resolve();
+      };
+      img.onerror = () => {
+        console.warn('Failed to load tile:', SPRITE_BASE + filename);
+        resolve();
+      };
+    });
+    promises.push(p);
+  }
+
+  return Promise.all(promises).then(() => {
+    tilesLoaded = true;
+    console.log('Tile images loaded:', tileImageCache.size);
+  });
 }
 
 // Draw sprite with white flash (damage effect)

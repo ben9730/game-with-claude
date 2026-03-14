@@ -6,6 +6,7 @@ import { createEnemy } from './enemies.js';
 import { player } from './player.js';
 import { generateTorches, initFog, drawTorches, drawFog, torches } from './lighting.js';
 import { initEmbers } from './effects.js';
+import { getTileImage, isTilesLoaded } from './sprites.js';
 
 export let rooms = [];
 export let currentRoom = 0;
@@ -339,7 +340,9 @@ function drawDithered2(ctx, x, y, w, h, color1, color2) {
 // ============================================================
 // PRE-RENDERED ROOM BACKGROUND CACHE
 // ============================================================
-function bakeRoomBackground() {
+export function bakeRoomBackground() {
+  // Guard: don't bake if no room is loaded yet
+  if (roomH === 0 || roomW === 0) return;
   if (!_roomBgCanvas) {
     _roomBgCanvas = document.createElement("canvas");
   }
@@ -352,15 +355,19 @@ function bakeRoomBackground() {
   ctx.fillRect(0, 0, W, H);
 
   // Floor and wall tiles
+  ctx.imageSmoothingEnabled = false;
   for (let y = 0; y < roomH; y++) {
     for (let x = 0; x < roomW; x++) {
       const px = roomOffX + x * TILE;
       const py = roomOffY + y * TILE;
-      const seed = (x * 73 + y * 137 + currentRoom * 47) % 4;
+      const seed = (x * 73 + y * 137 + currentRoom * 47) % 8;
 
       if (roomGrid[y][x] === 0) {
-        // Draw cached floor tile
-        if (floorTileCache.length > 0) {
+        // Draw floor tile - prefer sprite atlas images
+        const floorImg = isTilesLoaded() ? getTileImage('floor_' + (seed + 1)) : null;
+        if (floorImg) {
+          ctx.drawImage(floorImg, px, py, TILE, TILE);
+        } else if (floorTileCache.length > 0) {
           ctx.drawImage(floorTileCache[seed % floorTileCache.length], px, py);
         } else {
           ctx.fillStyle = RAMP.stone_floor[1 + (seed % 2)];
@@ -368,40 +375,79 @@ function bakeRoomBackground() {
         }
 
         // Ambient occlusion: darken floor next to walls
-        // Check north wall
         if (y > 0 && roomGrid[y - 1][x] === 1) {
           ctx.fillStyle = "rgba(0,0,0,0.2)";
           ctx.fillRect(px, py, TILE, 4);
           ctx.fillStyle = "rgba(0,0,0,0.1)";
           ctx.fillRect(px, py + 4, TILE, 3);
         }
-        // Check west wall
         if (x > 0 && roomGrid[y][x - 1] === 1) {
           ctx.fillStyle = "rgba(0,0,0,0.15)";
           ctx.fillRect(px, py, 3, TILE);
         }
-        // Check south wall
         if (y < roomH - 1 && roomGrid[y + 1][x] === 1) {
           ctx.fillStyle = "rgba(0,0,0,0.12)";
           ctx.fillRect(px, py + TILE - 3, TILE, 3);
         }
-        // Check east wall
         if (x < roomW - 1 && roomGrid[y][x + 1] === 1) {
           ctx.fillStyle = "rgba(0,0,0,0.08)";
           ctx.fillRect(px + TILE - 3, py, 3, TILE);
         }
       } else {
-        // Draw cached wall tile
-        const wallSeed = (x * 31 + y * 97 + currentRoom * 13) % 3;
-        if (wallTileCache.length > 0) {
-          ctx.drawImage(wallTileCache[wallSeed], px, py);
+        // Draw wall tile - prefer sprite atlas images
+        if (isTilesLoaded()) {
+          let tileImg = null;
+          const hasFloorBelow = (y + 1 < roomH && roomGrid[y + 1][x] === 0);
+          const hasFloorAbove = (y - 1 >= 0 && roomGrid[y - 1][x] === 0);
+          const isLeftEdge = (x === 0 || (x > 0 && roomGrid[y][x - 1] === 0));
+          const isRightEdge = (x === roomW - 1 || (x < roomW - 1 && roomGrid[y][x + 1] === 0));
+
+          if (hasFloorBelow) {
+            // Wall face visible from below - use wall_mid variants
+            if (isLeftEdge) {
+              tileImg = getTileImage('wall_left');
+            } else if (isRightEdge) {
+              tileImg = getTileImage('wall_right');
+            } else {
+              tileImg = getTileImage('wall_mid');
+            }
+          } else if (hasFloorAbove) {
+            // Top of wall / edge facing down
+            tileImg = getTileImage('edge_down');
+          } else {
+            // Wall top (not visible face)
+            if (isLeftEdge) {
+              tileImg = getTileImage('wall_top_left');
+            } else if (isRightEdge) {
+              tileImg = getTileImage('wall_top_right');
+            } else {
+              tileImg = getTileImage('wall_top_mid');
+            }
+          }
+
+          if (tileImg) {
+            ctx.drawImage(tileImg, px, py, TILE, TILE);
+          } else {
+            // Fallback to cached procedural wall
+            const wallSeed = (x * 31 + y * 97 + currentRoom * 13) % 3;
+            if (wallTileCache.length > 0) {
+              ctx.drawImage(wallTileCache[wallSeed], px, py);
+            }
+          }
         } else {
-          ctx.fillStyle = RAMP.stone_wall[2];
-          ctx.fillRect(px, py, TILE, TILE);
+          // Fallback: use procedural cache
+          const wallSeed = (x * 31 + y * 97 + currentRoom * 13) % 3;
+          if (wallTileCache.length > 0) {
+            ctx.drawImage(wallTileCache[wallSeed], px, py);
+          } else {
+            ctx.fillStyle = RAMP.stone_wall[2];
+            ctx.fillRect(px, py, TILE, TILE);
+          }
         }
       }
     }
   }
+  ctx.imageSmoothingEnabled = true;
 
   // --- FLOOR DETAILS ---
   for (const fd of floorDetails) {
@@ -587,6 +633,45 @@ function bakeRoomBackground() {
       ctx.globalAlpha = 1;
     }
   }
+
+  // --- WALL DECORATIONS FROM SPRITE ATLAS ---
+  if (isTilesLoaded()) {
+    ctx.imageSmoothingEnabled = false;
+    for (let y = 0; y < roomH; y++) {
+      for (let x = 0; x < roomW; x++) {
+        if (roomGrid[y][x] !== 1) continue;
+        const hasFloorBelow = (y + 1 < roomH && roomGrid[y + 1][x] === 0);
+        if (!hasFloorBelow) continue;
+
+        const px = roomOffX + x * TILE;
+        const py = roomOffY + y * TILE;
+        const decoSeed = (x * 73 + y * 137 + currentRoom * 311) % 100;
+
+        if (decoSeed < 5) {
+          // Banner red (5%)
+          const img = getTileImage('wall_banner_red');
+          if (img) ctx.drawImage(img, px, py, TILE, TILE);
+        } else if (decoSeed < 8) {
+          // Banner blue (3%)
+          const img = getTileImage('wall_banner_blue');
+          if (img) ctx.drawImage(img, px, py, TILE, TILE);
+        } else if (decoSeed < 10) {
+          // Banner green (2%)
+          const img = getTileImage('wall_banner_green');
+          if (img) ctx.drawImage(img, px, py, TILE, TILE);
+        } else if (decoSeed < 15) {
+          // Wall hole (5%)
+          const holeImg = getTileImage(decoSeed % 2 === 0 ? 'wall_hole_1' : 'wall_hole_2');
+          if (holeImg) ctx.drawImage(holeImg, px, py, TILE, TILE);
+        } else if (decoSeed < 20) {
+          // Wall goo (5%)
+          const gooImg = getTileImage('wall_goo');
+          if (gooImg) ctx.drawImage(gooImg, px, py, TILE, TILE);
+        }
+      }
+    }
+    ctx.imageSmoothingEnabled = true;
+  }
 }
 
 export function drawRoom(ctx) {
@@ -613,26 +698,111 @@ function drawDoor(ctx) {
   const doorPX = roomOffX + doorTX * TILE;
   const doorPY = roomOffY + doorTY * TILE;
 
+  // Try sprite-based door first
+  const useSprDoor = isTilesLoaded() && getTileImage('doors_frame_left');
+
+  if (useSprDoor) {
+    drawDoorSprite(ctx, doorPX, doorPY);
+  } else {
+    drawDoorProcedural(ctx, doorPX, doorPY);
+  }
+}
+
+function drawDoorSprite(ctx, doorPX, doorPY) {
+  ctx.imageSmoothingEnabled = false;
+  const S = TILE; // draw at tile size
+
+  // Draw door frame pieces
+  const frameLeft = getTileImage('doors_frame_left');
+  const frameRight = getTileImage('doors_frame_right');
+  const frameTop = getTileImage('doors_frame_top');
+
+  if (doorOpen && currentRoom < rooms.length - 1) {
+    const openAmount = doorAnimState === 2 ? 1 : clamp01(doorAnimTimer / 0.5);
+
+    // Dark interior behind door
+    ctx.fillStyle = "#080606";
+    ctx.fillRect(doorPX + 2, doorPY + 2, S - 4, S - 4);
+
+    // Warm golden glow from threshold
+    if (openAmount > 0.3) {
+      const glowAlpha = (openAmount - 0.3) * 0.3;
+      ctx.globalAlpha = glowAlpha;
+      const doorGlow = ctx.createRadialGradient(
+        doorPX + S / 2, doorPY + S / 2, 2,
+        doorPX + S / 2, doorPY + S / 2, 40
+      );
+      doorGlow.addColorStop(0, "#ffcc66");
+      doorGlow.addColorStop(0.5, "rgba(255,180,80,0.3)");
+      doorGlow.addColorStop(1, "rgba(255,150,50,0)");
+      ctx.fillStyle = doorGlow;
+      ctx.fillRect(doorPX - 30, doorPY - 30, S + 60, S + 60);
+      ctx.globalAlpha = 1;
+    }
+
+    // Open door leaf
+    if (openAmount < 1) {
+      const leafClosed = getTileImage('doors_leaf_closed');
+      const leafOpen = getTileImage('doors_leaf_open');
+      if (openAmount < 0.5 && leafClosed) {
+        ctx.globalAlpha = 1 - openAmount * 2;
+        ctx.drawImage(leafClosed, doorPX, doorPY, S, S);
+        ctx.globalAlpha = 1;
+      } else if (leafOpen) {
+        ctx.globalAlpha = (openAmount - 0.5) * 2;
+        ctx.drawImage(leafOpen, doorPX, doorPY, S, S);
+        ctx.globalAlpha = 1;
+      }
+    } else {
+      const leafOpen = getTileImage('doors_leaf_open');
+      if (leafOpen) ctx.drawImage(leafOpen, doorPX, doorPY, S, S);
+    }
+
+    // Draw frame on top
+    if (frameTop) ctx.drawImage(frameTop, doorPX, doorPY - S, S, S);
+    if (frameLeft) ctx.drawImage(frameLeft, doorPX - S / 2, doorPY, S / 2 + 2, S);
+    if (frameRight) ctx.drawImage(frameRight, doorPX + S - 2, doorPY, S / 2 + 2, S);
+
+    // Arrow indicator when fully open
+    if (openAmount >= 1) {
+      ctx.fillStyle = PAL.textGold;
+      const arrowBob = Math.sin(performance.now() / 300) * 3;
+      const aa = 0.5 + Math.sin(performance.now() / 400) * 0.3;
+      ctx.globalAlpha = aa;
+      ctx.fillRect(doorPX + 10 + arrowBob, doorPY + 12, 12, 3);
+      ctx.fillRect(doorPX + 18 + arrowBob, doorPY + 9, 3, 9);
+      ctx.fillRect(doorPX + 21 + arrowBob, doorPY + 12, 3, 3);
+      ctx.globalAlpha = 1;
+    }
+  } else {
+    // Closed door with sprite
+    const leafClosed = getTileImage('doors_leaf_closed');
+    if (leafClosed) ctx.drawImage(leafClosed, doorPX, doorPY, S, S);
+
+    // Draw frame on top
+    if (frameTop) ctx.drawImage(frameTop, doorPX, doorPY - S, S, S);
+    if (frameLeft) ctx.drawImage(frameLeft, doorPX - S / 2, doorPY, S / 2 + 2, S);
+    if (frameRight) ctx.drawImage(frameRight, doorPX + S - 2, doorPY, S / 2 + 2, S);
+  }
+  ctx.imageSmoothingEnabled = true;
+}
+
+function drawDoorProcedural(ctx, doorPX, doorPY) {
   if (doorOpen && currentRoom < rooms.length - 1) {
     // Door frame with stone detail
     ctx.fillStyle = RAMP.stone_wall[1];
     ctx.fillRect(doorPX, doorPY - 3, TILE, TILE + 6);
-    // Frame highlight
     ctx.fillStyle = RAMP.stone_wall[0];
     ctx.fillRect(doorPX, doorPY - 3, TILE, 1);
     ctx.fillRect(doorPX, doorPY - 3, 1, TILE + 6);
-    // Frame shadow
     ctx.fillStyle = RAMP.stone_wall[3];
     ctx.fillRect(doorPX + TILE - 1, doorPY - 3, 1, TILE + 6);
     ctx.fillRect(doorPX, doorPY + TILE + 2, TILE, 1);
 
-    // Opening animation
     const openAmount = doorAnimState === 2 ? 1 : clamp01(doorAnimTimer / 0.5);
-    // Dark interior
     ctx.fillStyle = "#080606";
     ctx.fillRect(doorPX + 2, doorPY + 2, TILE - 4, TILE - 4);
 
-    // Warm golden glow from threshold
     if (openAmount > 0.3) {
       const glowAlpha = (openAmount - 0.3) * 0.3;
       ctx.globalAlpha = glowAlpha;
@@ -648,18 +818,14 @@ function drawDoor(ctx) {
       ctx.globalAlpha = 1;
     }
 
-    // Door panels sliding open with wood texture
     const panelW = (TILE / 2 - 2) * (1 - openAmount);
     if (panelW > 0) {
-      // Left panel
       ctx.fillStyle = RAMP.wood[2];
       ctx.fillRect(doorPX + 2, doorPY + 2, panelW, TILE - 4);
-      // Wood grain lines
       ctx.fillStyle = RAMP.wood[3];
       for (let i = 0; i < panelW; i += 3) {
         ctx.fillRect(doorPX + 2 + i, doorPY + 2, 1, TILE - 4);
       }
-      // Right panel
       const rightX = doorPX + TILE / 2 + (TILE / 2 - 2) * openAmount;
       ctx.fillStyle = RAMP.wood[2];
       ctx.fillRect(rightX, doorPY + 2, panelW, TILE - 4);
@@ -667,7 +833,6 @@ function drawDoor(ctx) {
       for (let i = 0; i < panelW; i += 3) {
         ctx.fillRect(rightX + i, doorPY + 2, 1, TILE - 4);
       }
-      // Iron bands on panels
       ctx.fillStyle = PAL.doorIron;
       ctx.fillRect(doorPX + 2, doorPY + 8, panelW, 2);
       ctx.fillRect(doorPX + 2, doorPY + TILE - 10, panelW, 2);
@@ -675,17 +840,14 @@ function drawDoor(ctx) {
       ctx.fillRect(rightX, doorPY + TILE - 10, panelW, 2);
     }
 
-    // Iron frame border
     ctx.fillStyle = PAL.doorIronLight;
     ctx.fillRect(doorPX, doorPY - 3, TILE, 2);
     ctx.fillRect(doorPX, doorPY + TILE + 1, TILE, 2);
     ctx.fillRect(doorPX, doorPY, 2, TILE);
-    // Rivets on frame
     ctx.fillStyle = RAMP.steel[0];
     ctx.fillRect(doorPX + 1, doorPY, 1, 1);
     ctx.fillRect(doorPX + 1, doorPY + TILE - 1, 1, 1);
 
-    // Arrow indicator
     if (openAmount >= 1) {
       ctx.fillStyle = PAL.textGold;
       const arrowBob = Math.sin(performance.now() / 300) * 3;
@@ -697,48 +859,37 @@ function drawDoor(ctx) {
       ctx.globalAlpha = 1;
     }
   } else {
-    // Closed door
-    // Frame
     ctx.fillStyle = RAMP.stone_wall[1];
     ctx.fillRect(doorPX, doorPY - 3, TILE, TILE + 6);
     ctx.fillStyle = RAMP.stone_wall[0];
     ctx.fillRect(doorPX, doorPY - 3, TILE, 1);
 
-    // Door body with wood plank texture
     ctx.fillStyle = RAMP.wood[2];
     ctx.fillRect(doorPX + 2, doorPY + 2, TILE - 4, TILE - 4);
-    // Vertical plank grain lines
     ctx.fillStyle = RAMP.wood[3];
     for (let i = 3; i < TILE - 4; i += 4) {
       ctx.fillRect(doorPX + 2 + i, doorPY + 2, 1, TILE - 4);
     }
-    // Wood highlight (left edge)
     ctx.fillStyle = RAMP.wood[0];
     ctx.fillRect(doorPX + 2, doorPY + 2, 1, TILE - 4);
-    // Wood shadow (right edge)
     ctx.fillStyle = RAMP.wood[4];
     ctx.fillRect(doorPX + TILE - 3, doorPY + 2, 1, TILE - 4);
 
-    // Iron band horizontals with rivet dots
     ctx.fillStyle = PAL.doorIron;
     ctx.fillRect(doorPX + 2, doorPY + 6, TILE - 4, 2);
     ctx.fillRect(doorPX + 2, doorPY + TILE - 8, TILE - 4, 2);
-    // Iron band highlight
     ctx.fillStyle = PAL.doorIronLight;
     ctx.fillRect(doorPX + 2, doorPY + 6, TILE - 4, 1);
     ctx.fillRect(doorPX + 2, doorPY + TILE - 8, TILE - 4, 1);
-    // Rivet dots
     ctx.fillStyle = RAMP.steel[0];
     ctx.fillRect(doorPX + 5, doorPY + 6, 1, 2);
     ctx.fillRect(doorPX + TILE - 6, doorPY + 6, 1, 2);
     ctx.fillRect(doorPX + 5, doorPY + TILE - 8, 1, 2);
     ctx.fillRect(doorPX + TILE - 6, doorPY + TILE - 8, 1, 2);
 
-    // Keyhole detail
     ctx.fillStyle = "#000";
     ctx.fillRect(doorPX + TILE / 2 - 1, doorPY + TILE / 2 - 3, 3, 5);
     ctx.fillRect(doorPX + TILE / 2 - 2, doorPY + TILE / 2 + 1, 5, 3);
-    // Keyhole rim
     ctx.fillStyle = PAL.doorIronDark;
     ctx.fillRect(doorPX + TILE / 2 - 2, doorPY + TILE / 2 - 4, 5, 1);
     ctx.fillRect(doorPX + TILE / 2 - 3, doorPY + TILE / 2 + 1, 1, 3);

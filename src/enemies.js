@@ -218,10 +218,9 @@ export function drawEnemy(ctx, e) {
       } else {
         isMoving = (e.vx !== 0 || e.vy !== 0);
       }
-      const hasBatRun = e.type === 'bat';
-      const hasBossRun = e.type === 'boss';
+      const hasRunAnim = e.type === 'bat' || e.type === 'boss' || e.type === 'skeleton';
       let animName = 'idle';
-      if (isMoving && (hasBatRun || hasBossRun)) {
+      if (isMoving && hasRunAnim) {
         animName = 'run';
       }
       const flipH = Math.cos(e.angle) < 0;

@@ -4,7 +4,7 @@ import { W, H, PAL, STATE } from './config.js';
 import { keys, anyKeyPressed, setAnyKeyPressed, initInput } from './input.js';
 import { updateShake } from './camera.js';
 import { updateParticles, clearParticles } from './particles.js';
-import { generateRooms, loadRoom, getRoomState, setDoorAnimTimer, setDoorAnimState, setBossEntranceTimer, setBossEntranceActive } from './rooms.js';
+import { generateRooms, loadRoom, getRoomState, setDoorAnimTimer, setDoorAnimState, setBossEntranceTimer, setBossEntranceActive, bakeRoomBackground } from './rooms.js';
 import { updateFog, torches } from './lighting.js';
 import { player, resetPlayer, updatePlayer, setLoadRoom } from './player.js';
 import { updateEnemies } from './enemies.js';
@@ -53,7 +53,11 @@ setLoadRoom(loadRoom);
 initAmbientMotes();
 
 // Load sprite assets (async — game runs with procedural fallback until loaded)
-loadAllSprites().then(() => console.log('All sprites loaded.'));
+loadAllSprites().then(() => {
+  console.log('All sprites loaded.');
+  // Re-bake room background now that tile images are available
+  bakeRoomBackground();
+});
 
 // ============================================================
 // GAME INIT
