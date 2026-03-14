@@ -4,6 +4,12 @@ A fantasy dungeon roguelike built entirely with HTML5 Canvas and vanilla JavaScr
 
 ![Gameplay - Knight vs Enemies](screenshots/01-floor1-knight-vs-enemies.png)
 
+## Demo
+
+[![Depths of the Dark Keep - Demo](https://img.youtube.com/vi/92hhyZO8YmY/maxresdefault.jpg)](https://www.youtube.com/watch?v=92hhyZO8YmY)
+
+> Click the image above to watch the gameplay demo on YouTube
+
 ## Play
 
 **Live:** [Play on GitHub Pages](https://ben9730.github.io/game-with-claude/) *(deploy with instructions below)*
