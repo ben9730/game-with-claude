@@ -94,7 +94,22 @@ export function renderPlaying(ctx) {
   drawVignette(ctx);
   drawBloom(ctx);
   drawColorGrading(ctx, currentRoom, rooms.length, player.hp / player.maxHp, globalTime);
-  drawFilmGrain(ctx);
+
+  // Per-floor biome tinting (after scene, before HUD)
+  const biomeColors = [
+    'rgba(255, 235, 220, 0.92)',  // Floor 1: warm dungeon
+    'rgba(220, 230, 255, 0.92)',  // Floor 2: cold crypt
+    'rgba(255, 220, 220, 0.92)',  // Floor 3: blood halls
+    'rgba(220, 255, 230, 0.92)',  // Floor 4: toxic depths
+    'rgba(255, 215, 215, 0.92)',  // Floor 5+: boss (crimson)
+  ];
+  const biomeIdx = Math.min(currentRoom, biomeColors.length - 1);
+  ctx.globalCompositeOperation = 'multiply';
+  ctx.fillStyle = biomeColors[biomeIdx];
+  ctx.fillRect(0, 0, W, H);
+  ctx.globalCompositeOperation = 'source-over';
+
+  // drawFilmGrain(ctx); // Disabled for bright mode — invisible and wastes performance
   drawScanlines(ctx);
   drawScreenFlash(ctx);
   drawChroma(ctx);

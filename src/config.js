@@ -27,7 +27,7 @@ export const RAMP = {
 };
 
 export const PAL = {
-  bg: "#0d0814",
+  bg: "#1a1520",  // Slightly lighter purple-dark for bright mode
   // Walls
   wall: RAMP.stone_wall[2],
   wallTop: RAMP.stone_wall[1],

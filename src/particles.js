@@ -292,7 +292,7 @@ export function updateParticles(dt) {
 }
 
 // Types that use additive blend for glow-through-darkness effect
-const ADDITIVE_TYPES = { spark: 1, sparkle: 1, flash: 1 };
+const ADDITIVE_TYPES = {}; // Disabled for bright mode — additive disappears on bright backgrounds
 
 export function drawParticles(ctx) {
   // First pass: normal blend particles

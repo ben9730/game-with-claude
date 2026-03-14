@@ -366,7 +366,17 @@ export function bakeRoomBackground() {
         // Draw floor tile - prefer sprite atlas images
         const floorImg = isTilesLoaded() ? getTileImage('floor_' + (seed + 1)) : null;
         if (floorImg) {
-          ctx.drawImage(floorImg, px, py, TILE, TILE);
+          // Rotation/flip for variety (64 variations from 8 tiles)
+          ctx.save();
+          ctx.translate(px + TILE/2, py + TILE/2);
+          const rotSeed = (x * 31 + y * 97 + currentRoom * 53) % 8;
+          const rotation = (rotSeed % 4) * Math.PI / 2;
+          const flipX = rotSeed >= 4 ? -1 : 1;
+          ctx.rotate(rotation);
+          ctx.scale(flipX, 1);
+          ctx.imageSmoothingEnabled = false;
+          ctx.drawImage(floorImg, -TILE/2, -TILE/2, TILE, TILE);
+          ctx.restore();
         } else if (floorTileCache.length > 0) {
           ctx.drawImage(floorTileCache[seed % floorTileCache.length], px, py);
         } else {

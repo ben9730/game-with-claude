@@ -142,7 +142,7 @@ export function drawBloom(ctx) {
 
   // Composite with additive blend
   ctx.globalCompositeOperation = "lighter";
-  ctx.globalAlpha = 0.25;
+  ctx.globalAlpha = 0.08; // Reduced for bright scenes (was 0.25)
   ctx.drawImage(_bloomCanvas, 0, 0);
   ctx.globalAlpha = 1;
   ctx.globalCompositeOperation = "source-over";

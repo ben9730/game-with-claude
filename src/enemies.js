@@ -226,16 +226,11 @@ export function drawEnemy(ctx, e) {
       const flipH = Math.cos(e.angle) < 0;
       const animTime = globalTime + e.x * 0.01; // offset so enemies aren't in sync
 
-      // Entity glow halo — colored per enemy type
-      const glowColors = { slime: "#44ff44", bat: "#ff4444", skeleton: "#ff6644", boss: "#ff2222" };
-      const glowRadii = { slime: 22, bat: 20, skeleton: 24, boss: 45 };
-      drawEntityGlow(ctx, px, py + 4, glowRadii[e.type] || 20, glowColors[e.type] || "#ff8844", 0.12);
-
-      // Shadow
-      ctx.fillStyle = PAL.shadow;
+      // Shadow (bigger, softer for bright scene)
+      const shadowR = e.type === 'boss' ? 30 : 16;
+      ctx.fillStyle = "rgba(0,0,0,0.2)";
       ctx.beginPath();
-      const sr = e.type === 'boss' ? 22 : 14;
-      ctx.ellipse(px, py + sr * 0.8, sr, sr * 0.3, 0, 0, Math.PI * 2);
+      ctx.ellipse(px, py + shadowR * 0.8, shadowR, shadowR * 0.3, 0, 0, Math.PI * 2);
       ctx.fill();
 
       // Idle breathing
@@ -246,7 +241,7 @@ export function drawEnemy(ctx, e) {
       ctx.translate(-px, -py);
 
       const scale = e.type === 'boss' ? 4.5 : 3;
-      const rimColors = { slime: "#66ff66", bat: "#ff6666", skeleton: "#ffaa66", boss: "#ff4444" };
+      const rimColors = { slime: "#00aa00", bat: "#cc0000", skeleton: "#ddaa00", boss: "#cc00cc" };
 
       if (flash) {
         drawSpriteFlash(ctx, spriteName, animName, animTime, px, py, flipH, scale);

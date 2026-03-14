@@ -413,13 +413,10 @@ export function drawPlayer(ctx) {
       ctx.globalAlpha = 1;
     }
 
-    // Entity glow halo — warm light under player
-    drawEntityGlow(ctx, px, py + 4, 30, "#ffcc88", 0.12);
-
-    // Shadow
-    ctx.fillStyle = PAL.shadow;
+    // Shadow (bigger, softer for bright scene)
+    ctx.fillStyle = "rgba(0,0,0,0.25)";
     ctx.beginPath();
-    ctx.ellipse(px, py + 12, 14, 5, 0, 0, Math.PI * 2);
+    ctx.ellipse(px, py + 16, 18, 6, 0, 0, Math.PI * 2);
     ctx.fill();
 
     if (iframeFlicker) ctx.globalAlpha = 0.4;
@@ -433,7 +430,7 @@ export function drawPlayer(ctx) {
       drawSpriteFlash(ctx, 'knight', animName, animTime, px, py + walkBob * 0.3, flipH);
     } else {
       // Draw with colored rim glow for visibility
-      drawSpriteWithGlow(ctx, 'knight', animName, animTime, px, py + walkBob * 0.3, flipH, null, "#aaddff");
+      drawSpriteWithGlow(ctx, 'knight', animName, animTime, px, py + walkBob * 0.3, flipH, null, "#ffffff");
     }
 
     // Buff aura
