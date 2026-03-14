@@ -55,11 +55,11 @@ export function renderPlaying(ctx) {
   // === PARTICLE LAYER ===
   drawParticles(ctx);
 
-  // === LIGHTING LAYER — multiplicative colored lighting ===
-  drawLightingOverlay(ctx);
+  // === LIGHTING LAYER — disabled (full brightness mode) ===
+  // drawLightingOverlay(ctx);
 
-  // === GOD RAYS — radial light shafts from torches ===
-  drawGodRays(ctx, torches, globalTime);
+  // === GOD RAYS — disabled with lighting ===
+  // drawGodRays(ctx, torches, globalTime);
 
   // === ATMOSPHERIC LAYER — additive motes & embers (glow through darkness) ===
   drawAmbientMotes(ctx);
@@ -126,7 +126,6 @@ export function renderGameOver(ctx) {
   for (const e of enemies) drawEnemy(ctx, e);
   drawPlayer(ctx);
   drawParticles(ctx);
-  drawLightingOverlay(ctx);
   ctx.restore();
   drawVignette(ctx);
   drawGameOver(ctx);
@@ -137,7 +136,6 @@ export function renderVictory(ctx) {
   ctx.translate(shakeX, shakeY);
   drawRoom(ctx);
   drawParticles(ctx);
-  drawLightingOverlay(ctx);
   drawAmbientMotes(ctx);
   drawEmbers(ctx);
   ctx.restore();
