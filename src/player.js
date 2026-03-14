@@ -11,7 +11,7 @@ import { damageEnemy } from './enemies.js';
 import { startTransition } from './transitions.js';
 import { getGameState, setGameState, getStats, getGlobalTime } from './main.js';
 import { TILE } from './config.js';
-import { drawSprite, drawSpriteFlash, isSpritesLoaded } from './sprites.js';
+import { drawSprite, drawSpriteFlash, drawSpriteWithGlow, drawEntityGlow, isSpritesLoaded } from './sprites.js';
 
 export const player = {
   x: 0, y: 0, radius: 12,
@@ -413,10 +413,13 @@ export function drawPlayer(ctx) {
       ctx.globalAlpha = 1;
     }
 
+    // Entity glow halo — warm light under player
+    drawEntityGlow(ctx, px, py + 4, 30, "#ffcc88", 0.12);
+
     // Shadow
     ctx.fillStyle = PAL.shadow;
     ctx.beginPath();
-    ctx.ellipse(px, py + 9, 11, 4, 0, 0, Math.PI * 2);
+    ctx.ellipse(px, py + 12, 14, 5, 0, 0, Math.PI * 2);
     ctx.fill();
 
     if (iframeFlicker) ctx.globalAlpha = 0.4;
@@ -429,7 +432,8 @@ export function drawPlayer(ctx) {
     if (flash) {
       drawSpriteFlash(ctx, 'knight', animName, animTime, px, py + walkBob * 0.3, flipH);
     } else {
-      drawSprite(ctx, 'knight', animName, animTime, px, py + walkBob * 0.3, flipH);
+      // Draw with colored rim glow for visibility
+      drawSpriteWithGlow(ctx, 'knight', animName, animTime, px, py + walkBob * 0.3, flipH, null, "#aaddff");
     }
 
     // Buff aura

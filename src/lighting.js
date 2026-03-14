@@ -284,16 +284,16 @@ export function drawLightingOverlay(ctx) {
   }
   const lctx = _lightCanvas.getContext("2d");
 
-  // Fill with ambient darkness — dark purple for atmosphere
+  // Fill with ambient darkness — slightly brighter so entities are visible
   lctx.globalCompositeOperation = "source-over";
-  lctx.fillStyle = "rgb(16, 10, 26)";
+  lctx.fillStyle = "rgb(35, 25, 45)";
   lctx.fillRect(0, 0, W, H);
 
   // Additive: punch light sources into the dark
   lctx.globalCompositeOperation = "lighter";
 
-  // Player light with shadow casting
-  const playerPoly = getVisibilityPolygon(player.x, player.y, 160);
+  // Player light with shadow casting — large bright radius
+  const playerPoly = getVisibilityPolygon(player.x, player.y, 210);
   if (playerPoly.length > 2) {
     lctx.save();
     lctx.beginPath();
@@ -304,17 +304,35 @@ export function drawLightingOverlay(ctx) {
     lctx.closePath();
     lctx.clip();
 
-    // Draw player light gradient (only in visible areas)
-    const plGrad = lctx.createRadialGradient(player.x, player.y, 4, player.x, player.y, 155);
-    plGrad.addColorStop(0, "rgb(190, 170, 145)");
-    plGrad.addColorStop(0.25, "rgb(140, 120, 100)");
-    plGrad.addColorStop(0.5, "rgb(80, 65, 50)");
-    plGrad.addColorStop(0.75, "rgb(30, 22, 16)");
+    // Draw player light gradient — brighter and wider
+    const plGrad = lctx.createRadialGradient(player.x, player.y, 6, player.x, player.y, 200);
+    plGrad.addColorStop(0, "rgb(220, 200, 170)");
+    plGrad.addColorStop(0.2, "rgb(180, 155, 125)");
+    plGrad.addColorStop(0.45, "rgb(110, 90, 70)");
+    plGrad.addColorStop(0.7, "rgb(50, 38, 28)");
     plGrad.addColorStop(1, "rgb(0, 0, 0)");
     lctx.fillStyle = plGrad;
     lctx.fillRect(0, 0, W, H);
 
     lctx.restore();
+  }
+
+  // Enemy light emission — enemies with glowing eyes emit small colored light
+  const { enemies } = getRoomState();
+  for (const e of enemies) {
+    if (e.dead) continue;
+    let lr = 0, lg = 0, lb = 0, radius = 30;
+    if (e.type === "bat") { lr = 80; lg = 15; lb = 15; radius = 35; }
+    else if (e.type === "skeleton") { lr = 60; lg = 20; lb = 20; radius = 30; }
+    else if (e.type === "boss") { lr = 120; lg = 30; lb = 30; radius = 60; }
+    else if (e.type === "slime") { lr = 20; lg = 60; lb = 20; radius = 25; }
+    if (lr > 0) {
+      const eg = lctx.createRadialGradient(e.x, e.y, 2, e.x, e.y, radius);
+      eg.addColorStop(0, `rgb(${lr}, ${lg}, ${lb})`);
+      eg.addColorStop(1, "rgb(0, 0, 0)");
+      lctx.fillStyle = eg;
+      lctx.fillRect(e.x - radius, e.y - radius, radius * 2, radius * 2);
+    }
   }
 
   // Torch lights — warm orange with flicker
@@ -324,10 +342,10 @@ export function drawLightingOverlay(ctx) {
     const r = torch.baseRadius * (0.85 + flicker * 0.25);
     const intensity = torch.intensity + flicker;
 
-    // Warm orange-yellow light
-    const ri = Math.min(255, (200 * intensity) | 0);
-    const gi = Math.min(255, (130 * intensity) | 0);
-    const bi = Math.min(255, (55 * intensity) | 0);
+    // Warm orange-yellow light — brighter
+    const ri = Math.min(255, (240 * intensity) | 0);
+    const gi = Math.min(255, (160 * intensity) | 0);
+    const bi = Math.min(255, (70 * intensity) | 0);
 
     const tGrad = lctx.createRadialGradient(torch.x, torch.y - 4, 2, torch.x, torch.y - 4, r);
     tGrad.addColorStop(0, `rgb(${ri}, ${gi}, ${bi})`);

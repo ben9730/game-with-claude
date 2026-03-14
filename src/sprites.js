@@ -1,7 +1,7 @@
 "use strict";
 
 const SPRITE_BASE = 'assets/0x72_DungeonTilesetII_v1.7/frames/';
-const SPRITE_SCALE = 2; // Draw 16x16 sprites at 2x = 32x32 on screen
+const SPRITE_SCALE = 3; // Draw 16x16 sprites at 3x = 48x48 on screen
 
 // Sprite definitions - maps game entities to sprite frames
 const SPRITE_DEFS = {
@@ -99,6 +99,66 @@ export function drawSprite(ctx, spriteName, animName, time, x, y, flipH, scale) 
 
   ctx.imageSmoothingEnabled = false; // Keep pixel art crisp
   ctx.drawImage(img, Math.floor(x - w / 2), Math.floor(y - h / 2), w, h);
+  ctx.imageSmoothingEnabled = true;
+  return true;
+}
+
+// Draw a colored glow halo underneath an entity
+export function drawEntityGlow(ctx, x, y, radius, color, alpha) {
+  ctx.save();
+  ctx.globalCompositeOperation = "lighter";
+  ctx.globalAlpha = alpha || 0.15;
+  const g = ctx.createRadialGradient(x, y, 2, x, y, radius);
+  g.addColorStop(0, color);
+  g.addColorStop(0.5, color);
+  g.addColorStop(1, "rgba(0,0,0,0)");
+  ctx.fillStyle = g;
+  ctx.fillRect(x - radius, y - radius, radius * 2, radius * 2);
+  ctx.globalAlpha = 1;
+  ctx.globalCompositeOperation = "source-over";
+  ctx.restore();
+}
+
+// Draw sprite with colored outline glow (rim light effect)
+export function drawSpriteWithGlow(ctx, spriteName, animName, time, x, y, flipH, scale, glowColor) {
+  if (!allLoaded) return false;
+  const key = getSpriteFrame(spriteName, animName, time);
+  if (!key) return false;
+  const img = imageCache.get(flipH ? key + '_flip' : key);
+  if (!img) return false;
+
+  const s = (scale || SPRITE_SCALE);
+  const w = (img.width || 16) * s;
+  const h = (img.height || 16) * s;
+  const dx = Math.floor(x - w / 2);
+  const dy = Math.floor(y - h / 2);
+
+  ctx.imageSmoothingEnabled = false;
+
+  // Draw glow outline: sprite drawn at 4 offsets in glow color
+  if (glowColor) {
+    // Create tinted version for glow
+    const tmp = document.createElement('canvas');
+    tmp.width = w + 4;
+    tmp.height = h + 4;
+    const tctx = tmp.getContext('2d');
+    tctx.imageSmoothingEnabled = false;
+    tctx.drawImage(img, 2, 2, w, h);
+    tctx.globalCompositeOperation = 'source-atop';
+    tctx.fillStyle = glowColor;
+    tctx.fillRect(0, 0, tmp.width, tmp.height);
+    tctx.globalCompositeOperation = 'source-over';
+
+    ctx.globalAlpha = 0.5;
+    ctx.drawImage(tmp, dx - 2 - 1, dy - 2);
+    ctx.drawImage(tmp, dx - 2 + 1, dy - 2);
+    ctx.drawImage(tmp, dx - 2, dy - 2 - 1);
+    ctx.drawImage(tmp, dx - 2, dy - 2 + 1);
+    ctx.globalAlpha = 1;
+  }
+
+  // Draw main sprite
+  ctx.drawImage(img, dx, dy, w, h);
   ctx.imageSmoothingEnabled = true;
   return true;
 }
