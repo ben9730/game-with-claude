@@ -501,6 +501,167 @@ export function drawBoss(e, flash) {
   }
 }
 
+// Draw only boss effects (used when sprite replaces body rendering)
+// Assumes ctx is already translated to boss position
+export function drawBossEffects(e, flash) {
+  const globalTime = getGlobalTime();
+  const isPhase2 = e.phase === 2;
+  const ctx = _bossCtx;
+
+  // Phase 2 aura glow
+  if (isPhase2 && !flash) {
+    ctx.globalAlpha = 0.08 + Math.sin(globalTime * 3) * 0.04;
+    const auraGrad = ctx.createRadialGradient(0, 0, 5, 0, 0, 35);
+    auraGrad.addColorStop(0, "#ff2222");
+    auraGrad.addColorStop(1, "rgba(255,0,0,0)");
+    ctx.fillStyle = auraGrad;
+    ctx.fillRect(-35, -40, 70, 70);
+    ctx.globalAlpha = 1;
+  }
+
+  // Phase 2: armor cracks (drawn on top of sprite)
+  if (isPhase2 && !flash) {
+    const breathe = Math.sin(globalTime * 2) * 1;
+    ctx.fillStyle = "#ff4422";
+    ctx.globalAlpha = 0.4 + Math.sin(globalTime * 5) * 0.2;
+    ctx.fillRect(-8, -12 + breathe, 1, 8);
+    ctx.fillRect(-7, -6 + breathe, 6, 1);
+    ctx.fillRect(4, -14 + breathe, 1, 10);
+    ctx.fillRect(4, -4 + breathe, 4, 1);
+    ctx.fillRect(-2, 2 + breathe, 8, 1);
+    ctx.fillRect(6, -2 + breathe, 1, 6);
+    ctx.globalAlpha = 1;
+  }
+
+  // Greatsword
+  ctx.save();
+  ctx.rotate(e.angle);
+
+  if (e.state === "swing") {
+    const t = 1 - e.stateTimer / 0.3;
+    ctx.rotate(-e.swingArc / 2 + e.swingArc * t);
+    ctx.globalAlpha = 0.12 * (1 - t);
+    ctx.fillStyle = "#ff4444";
+    ctx.fillRect(18, -8, 36, 16);
+    ctx.globalAlpha = 0.06 * (1 - t);
+    ctx.fillStyle = "#ff8844";
+    ctx.fillRect(18, -12, 36, 24);
+    ctx.globalAlpha = 1;
+  }
+
+  // Blade
+  ctx.fillStyle = flash ? "#fff" : PAL.bossSword;
+  ctx.fillRect(20, -3, 32, 6);
+  ctx.fillStyle = flash ? "#fff" : PAL.bossSwordEdge;
+  ctx.fillRect(20, -3, 32, 1);
+  ctx.fillStyle = flash ? "#fff" : PAL.bossSwordDeep;
+  ctx.fillRect(20, 2, 32, 1);
+  ctx.fillStyle = flash ? "#fff" : PAL.bossSwordEdge;
+  ctx.fillRect(48, -4, 6, 8);
+  ctx.fillRect(52, -3, 3, 6);
+  ctx.fillRect(54, -2, 2, 4);
+  ctx.fillStyle = flash ? "#fff" : PAL.bossSwordDeep;
+  ctx.fillRect(24, 0, 22, 1);
+  if (!flash) {
+    ctx.fillStyle = PAL.bossSwordEdge;
+    ctx.fillRect(24, -1, 22, 1);
+    ctx.globalAlpha = 0.3;
+    ctx.fillRect(24, -1, 22, 1);
+    ctx.globalAlpha = 1;
+  }
+  // Guard
+  ctx.fillStyle = flash ? "#fff" : RAMP.gold[3];
+  ctx.fillRect(16, -7, 6, 14);
+  if (!flash) {
+    ctx.fillStyle = RAMP.gold[1];
+    ctx.fillRect(16, -7, 6, 2);
+    ctx.fillRect(16, -7, 2, 14);
+    ctx.fillStyle = RAMP.gold[4];
+    ctx.fillRect(20, -3, 2, 10);
+  }
+  if (!flash) {
+    ctx.fillStyle = isPhase2 ? "#ff2222" : "#4444aa";
+    ctx.fillRect(17, -5, 3, 3);
+    ctx.fillRect(17, 3, 3, 3);
+    ctx.fillStyle = isPhase2 ? "#ff8888" : "#8888ff";
+    ctx.fillRect(17, -5, 1, 1);
+    ctx.fillRect(17, 3, 1, 1);
+  }
+  // Handle
+  ctx.fillStyle = flash ? "#fff" : RAMP.leather[3];
+  ctx.fillRect(10, -3, 7, 6);
+  if (!flash) {
+    ctx.fillStyle = RAMP.leather[2];
+    ctx.fillRect(11, -3, 2, 6);
+    ctx.fillRect(14, -3, 2, 6);
+    ctx.fillStyle = RAMP.leather[4];
+    ctx.fillRect(12, -3, 1, 6);
+    ctx.fillRect(15, -3, 1, 6);
+  }
+  // Pommel
+  ctx.fillStyle = flash ? "#fff" : RAMP.gold[3];
+  ctx.fillRect(8, -4, 4, 8);
+  if (!flash) {
+    ctx.fillStyle = RAMP.gold[1];
+    ctx.fillRect(8, -4, 4, 1);
+    ctx.fillRect(8, -4, 1, 8);
+    ctx.fillStyle = RAMP.gold[4];
+    ctx.fillRect(11, -1, 1, 5);
+  }
+  ctx.restore();
+
+  // Slam shockwave
+  if (e.state === "slamming") {
+    const t = 1 - e.stateTimer / 0.15;
+    const r = e.slamRadius * t;
+    const ringW = 6;
+    ctx.globalAlpha = 0.35 * (1 - t);
+    ctx.fillStyle = "#ff4422";
+    for (let i = 0; i < 16; i++) {
+      const a = (i / 16) * Math.PI * 2;
+      const rx = Math.cos(a) * r;
+      const ry = Math.sin(a) * r;
+      ctx.fillRect(rx - ringW / 2, ry - ringW / 2, ringW, ringW);
+    }
+    ctx.globalAlpha = 0.2 * (1 - t);
+    ctx.fillStyle = "#ffaa44";
+    ctx.fillRect(-r * 0.3, -r * 0.3, r * 0.6, r * 0.6);
+    ctx.globalAlpha = 1;
+  }
+
+  // Charge windup telegraph
+  if (e.state === "charge_windup") {
+    ctx.globalAlpha = 0.3 + Math.sin(performance.now() / 60) * 0.2;
+    ctx.fillStyle = "#ff2222";
+    const dx = Math.cos(e.chargeDir);
+    const dy = Math.sin(e.chargeDir);
+    for (let i = 1; i < 6; i++) {
+      const s = 5 - i * 0.7;
+      ctx.fillRect(dx * i * 18 - s / 2, dy * i * 18 - s / 2, s, s);
+    }
+    ctx.globalAlpha = 0.15;
+    ctx.fillStyle = "#ff4444";
+    ctx.fillRect(dx * 10 - 3, dy * 10 - 3, 6, 6);
+    ctx.globalAlpha = 1;
+  }
+
+  // Slam windup warning
+  if (e.state === "slam_windup") {
+    const pulse = Math.sin(performance.now() / 50);
+    const progress = 1 - e.stateTimer / 0.6;
+    ctx.globalAlpha = 0.12 + pulse * 0.08;
+    ctx.fillStyle = "#ff6622";
+    const wr = e.slamRadius * (0.3 + progress * 0.7);
+    for (let i = 0; i < 12; i++) {
+      const a = (i / 12) * Math.PI * 2;
+      const rx = Math.cos(a) * wr;
+      const ry = Math.sin(a) * wr;
+      ctx.fillRect(rx - 3, ry - 3, 6, 6);
+    }
+    ctx.globalAlpha = 1;
+  }
+}
+
 let _bossCtx = null;
 
 export function setBossCtx(ctx) {

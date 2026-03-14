@@ -19,6 +19,7 @@ import {
   initEmbers, updateEmbers,
   updateDamageNumbers,
 } from './effects.js';
+import { loadAllSprites } from './sprites.js';
 
 // ============================================================
 // CANVAS SETUP
@@ -50,6 +51,9 @@ setLoadRoom(loadRoom);
 
 // Initialize ambient effects
 initAmbientMotes();
+
+// Load sprite assets (async — game runs with procedural fallback until loaded)
+loadAllSprites().then(() => console.log('All sprites loaded.'));
 
 // ============================================================
 // GAME INIT

@@ -8,7 +8,8 @@ import { triggerHitStop, triggerSlowMo, triggerScreenFlash, triggerChroma, spawn
 import { player, damagePlayer } from './player.js';
 import { getRoomState, setDoorOpen, setDoorAnimState, setDoorAnimTimer } from './rooms.js';
 import { getGlobalTime, getStats, setGameState } from './main.js';
-import { updateBoss, drawBoss, setBossCtx } from './boss.js';
+import { updateBoss, drawBoss, drawBossEffects, setBossCtx } from './boss.js';
+import { drawSprite, drawSpriteFlash, isSpritesLoaded } from './sprites.js';
 
 export function createEnemy(type, x, y) {
   const base = {
@@ -203,6 +204,127 @@ export function drawEnemy(ctx, e) {
   const py = Math.floor(e.y);
   const flash = e.flashTimer > 0;
 
+  // ========== SPRITE-BASED RENDERING ==========
+  if (isSpritesLoaded()) {
+    const spriteMap = { slime: 'slime', bat: 'bat', skeleton: 'skeleton', boss: 'boss' };
+    const spriteName = spriteMap[e.type];
+    if (spriteName) {
+      // Determine animation: moving enemies use 'run' if available, otherwise 'idle'
+      let isMoving = false;
+      if (e.type === 'boss') {
+        isMoving = e.state === 'charging' || e.state === 'charge_windup';
+      } else if (e.type === 'bat') {
+        isMoving = true; // bats are always flying
+      } else {
+        isMoving = (e.vx !== 0 || e.vy !== 0);
+      }
+      const hasBatRun = e.type === 'bat';
+      const hasBossRun = e.type === 'boss';
+      let animName = 'idle';
+      if (isMoving && (hasBatRun || hasBossRun)) {
+        animName = 'run';
+      }
+      const flipH = Math.cos(e.angle) < 0;
+      const animTime = globalTime + e.x * 0.01; // offset so enemies aren't in sync
+
+      // Shadow
+      ctx.fillStyle = PAL.shadow;
+      ctx.beginPath();
+      ctx.ellipse(px, py + e.radius * 0.7, e.radius, e.radius * 0.3, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Idle breathing
+      const breathe = 1 + Math.sin(globalTime * 2 + e.x * 0.1 + e.y * 0.07) * 0.02;
+      ctx.save();
+      ctx.translate(px, py);
+      ctx.scale(breathe, 1 / breathe);
+      ctx.translate(-px, -py);
+
+      const scale = e.type === 'boss' ? 3 : 2;
+
+      if (flash) {
+        drawSpriteFlash(ctx, spriteName, animName, animTime, px, py, flipH, scale);
+      } else {
+        drawSprite(ctx, spriteName, animName, animTime, px, py, flipH, scale);
+      }
+
+      ctx.restore();
+
+      // For boss: draw special effects (slam shockwave, charge telegraph, etc.)
+      if (e.type === 'boss') {
+        ctx.save();
+        ctx.translate(px, py);
+        setBossCtx(ctx);
+        drawBossEffects(e, flash);
+        ctx.restore();
+      }
+
+      // For skeleton: draw the bow on top (it rotates toward player)
+      if (e.type === 'skeleton') {
+        const isDrawing = e.shootAnim > 0;
+        const drawProgress = isDrawing ? 1 - e.shootAnim / 0.3 : 0;
+        ctx.save();
+        ctx.translate(px, py);
+        ctx.rotate(e.angle);
+        // Bow limbs
+        ctx.fillStyle = flash ? "#fff" : RAMP.wood[2];
+        ctx.fillRect(10, -9, 3, 4);
+        ctx.fillRect(11, -6, 3, 12);
+        ctx.fillRect(10, 5, 3, 4);
+        ctx.fillStyle = flash ? "#fff" : RAMP.wood[0];
+        ctx.fillRect(10, -8, 1, 3);
+        ctx.fillRect(10, 5, 1, 3);
+        ctx.fillStyle = flash ? "#fff" : RAMP.wood[4];
+        ctx.fillRect(13, -5, 1, 10);
+        if (!flash) {
+          // Bowstring
+          ctx.fillStyle = "#ccc";
+          const stringPull = isDrawing ? drawProgress * 3 : 0;
+          ctx.fillRect(10, -9, 1, 1);
+          ctx.fillRect(10, 8, 1, 1);
+          ctx.fillRect(10 - stringPull, -1, 1 + stringPull, 2);
+          // Arrow nocked
+          ctx.fillStyle = RAMP.wood[1];
+          ctx.fillRect(10 - stringPull, -1, 10 + stringPull, 1);
+          // Arrowhead
+          ctx.fillStyle = RAMP.steel[1];
+          ctx.fillRect(18, -2, 4, 3);
+          ctx.fillRect(20, -1, 2, 1);
+          // Fletching
+          ctx.fillStyle = "#aa4444";
+          ctx.fillRect(10 - stringPull, -2, 2, 1);
+          ctx.fillRect(10 - stringPull, 1, 2, 1);
+        }
+        ctx.restore();
+      }
+
+      // HP bar
+      if (e.hp < e.maxHp) {
+        const barW = e.radius * 2 + 10;
+        const barH = 4;
+        const bx = px - barW / 2;
+        const by = py - e.radius - 16;
+        ctx.fillStyle = "#000";
+        ctx.fillRect(bx - 1, by - 1, barW + 2, barH + 2);
+        ctx.fillStyle = PAL.hpBarBg;
+        ctx.fillRect(bx, by, barW, barH);
+        const hpCol = e.type === "boss" ? "#cc33cc" : PAL.hpBar;
+        ctx.fillStyle = hpCol;
+        ctx.fillRect(bx, by, barW * (e.hp / e.maxHp), barH);
+        ctx.fillStyle = "rgba(0,0,0,0.2)";
+        const segs = e.type === "boss" ? 10 : 4;
+        for (let i = 1; i < segs; i++) {
+          ctx.fillRect(bx + barW * i / segs, by, 1, barH);
+        }
+        ctx.fillStyle = "rgba(255,255,255,0.2)";
+        ctx.fillRect(bx, by, barW * (e.hp / e.maxHp), 1);
+      }
+
+      return; // Skip procedural drawing
+    }
+  }
+
+  // ========== PROCEDURAL FALLBACK BELOW ==========
   ctx.save();
   ctx.translate(px, py);
 

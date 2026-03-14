@@ -11,6 +11,7 @@ import { damageEnemy } from './enemies.js';
 import { startTransition } from './transitions.js';
 import { getGameState, setGameState, getStats, getGlobalTime } from './main.js';
 import { TILE } from './config.js';
+import { drawSprite, drawSpriteFlash, isSpritesLoaded } from './sprites.js';
 
 export const player = {
   x: 0, y: 0, radius: 12,
@@ -392,6 +393,200 @@ export function drawPlayer(ctx) {
   const walkBob = player.isMoving ? Math.sin(player.walkTimer * 10) * 2 : 0;
   const legOffset = player.isMoving ? Math.sin(player.walkTimer * 10) * 3 : 0;
 
+  const flash = player.hurtFlash > 0;
+  const iframeFlicker = player.iFrames > 0 && Math.floor(player.iFrames * 20) % 2 === 0;
+
+  // ========== SPRITE-BASED RENDERING ==========
+  if (isSpritesLoaded()) {
+    const animName = player.attacking ? 'hit' : (player.isMoving ? 'run' : 'idle');
+    const flipH = Math.cos(player.facing) < 0;
+    const animTime = player.isMoving ? player.walkTimer : globalTime;
+
+    // Afterimage trail (dash ghost copies)
+    if (player.trail.length > 0) {
+      for (let i = 0; i < player.trail.length; i++) {
+        const t = player.trail[i];
+        const trailAlpha = 0.3 * (1 - i / player.trail.length);
+        ctx.globalAlpha = trailAlpha;
+        drawSprite(ctx, 'knight', animName, animTime, t.x, t.y, flipH);
+      }
+      ctx.globalAlpha = 1;
+    }
+
+    // Shadow
+    ctx.fillStyle = PAL.shadow;
+    ctx.beginPath();
+    ctx.ellipse(px, py + 9, 11, 4, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    if (iframeFlicker) ctx.globalAlpha = 0.4;
+
+    ctx.save();
+    ctx.translate(px, py + walkBob * 0.3);
+    ctx.scale(player.scaleX, player.scaleY);
+    ctx.translate(-(px), -(py + walkBob * 0.3));
+
+    if (flash) {
+      drawSpriteFlash(ctx, 'knight', animName, animTime, px, py + walkBob * 0.3, flipH);
+    } else {
+      drawSprite(ctx, 'knight', animName, animTime, px, py + walkBob * 0.3, flipH);
+    }
+
+    // Buff aura
+    if (!flash && !iframeFlicker) {
+      if (player.speedBuff > 0) {
+        ctx.globalAlpha = 0.12 + Math.sin(globalTime * 6) * 0.05;
+        ctx.strokeStyle = PAL.speedBlue;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.ellipse(px, py, 16, 14, 0, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.globalAlpha = iframeFlicker ? 0.4 : 1;
+      }
+      if (player.attackBuff > 0) {
+        ctx.globalAlpha = 0.12 + Math.sin(globalTime * 5) * 0.05;
+        ctx.strokeStyle = PAL.attackOrange;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.ellipse(px, py, 18, 16, 0, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.globalAlpha = iframeFlicker ? 0.4 : 1;
+      }
+    }
+
+    ctx.globalAlpha = 1;
+    ctx.restore();
+
+    // Sword (world-space, rotated to facing)
+    ctx.save();
+    ctx.translate(px, py);
+    ctx.rotate(a);
+
+    if (player.attacking) {
+      const swingT = 1 - player.attackTimer / player.attackDuration;
+      const swingAngle = -player.attackArc / 2 + player.attackArc * swingT;
+      ctx.rotate(swingAngle);
+      ctx.fillStyle = flash ? "#fff" : RAMP.steel[1];
+      ctx.fillRect(14, -2, 24, 4);
+      ctx.fillStyle = flash ? "#fff" : RAMP.steel[0];
+      ctx.fillRect(14, -2, 24, 1);
+      ctx.fillStyle = flash ? "#fff" : RAMP.steel[3];
+      ctx.fillRect(14, 1, 24, 1);
+      ctx.fillStyle = flash ? "#fff" : "#ffffff";
+      ctx.fillRect(36, -3, 3, 6);
+      ctx.fillStyle = flash ? "#fff" : RAMP.steel[0];
+      ctx.fillRect(37, -2, 2, 4);
+      ctx.fillStyle = flash ? "#fff" : RAMP.steel[2];
+      ctx.fillRect(18, 0, 14, 1);
+      ctx.fillStyle = flash ? "#fff" : RAMP.gold[3];
+      ctx.fillRect(12, -5, 4, 10);
+      ctx.fillStyle = flash ? "#fff" : RAMP.gold[1];
+      ctx.fillRect(12, -5, 4, 1);
+      if (!flash) {
+        ctx.fillStyle = "#4466cc";
+        ctx.fillRect(13, -2, 2, 2);
+      }
+      ctx.fillStyle = flash ? "#fff" : RAMP.gold[2];
+      ctx.fillRect(10, -3, 3, 6);
+      ctx.fillStyle = flash ? "#fff" : RAMP.gold[0];
+      ctx.fillRect(10, -3, 3, 1);
+      ctx.fillStyle = flash ? "#fff" : RAMP.leather[2];
+      ctx.fillRect(12, -4, 1, 2);
+      ctx.fillRect(12, 2, 1, 2);
+      ctx.globalAlpha = 0.25 * (1 - swingT);
+      ctx.fillStyle = PAL.slashTrail;
+      ctx.fillRect(14, -4, 26, 8);
+      ctx.globalAlpha = 0.1 * (1 - swingT);
+      ctx.fillStyle = "#8844cc";
+      ctx.fillRect(14, -6, 26, 12);
+      ctx.globalAlpha = 1;
+    } else {
+      ctx.fillStyle = flash ? "#fff" : RAMP.steel[1];
+      ctx.fillRect(14, -2, 22, 4);
+      ctx.fillStyle = flash ? "#fff" : RAMP.steel[0];
+      ctx.fillRect(14, -2, 22, 1);
+      ctx.fillStyle = flash ? "#fff" : RAMP.steel[3];
+      ctx.fillRect(14, 1, 22, 1);
+      ctx.fillStyle = flash ? "#fff" : "#ffffff";
+      ctx.fillRect(34, -3, 2, 6);
+      ctx.fillStyle = flash ? "#fff" : RAMP.steel[0];
+      ctx.fillRect(34, -2, 2, 4);
+      ctx.fillStyle = flash ? "#fff" : RAMP.steel[2];
+      ctx.fillRect(18, 0, 12, 1);
+      ctx.fillStyle = flash ? "#fff" : RAMP.gold[3];
+      ctx.fillRect(12, -5, 4, 10);
+      ctx.fillStyle = flash ? "#fff" : RAMP.gold[1];
+      ctx.fillRect(12, -5, 4, 1);
+      ctx.fillStyle = flash ? "#fff" : RAMP.gold[2];
+      ctx.fillRect(10, -3, 3, 6);
+      ctx.fillStyle = flash ? "#fff" : RAMP.gold[0];
+      ctx.fillRect(10, -3, 3, 1);
+    }
+    ctx.restore();
+
+    // Shield
+    if (player.blocking) {
+      ctx.save();
+      ctx.translate(px, py);
+      ctx.rotate(a);
+      ctx.fillStyle = flash ? "#fff" : PAL.shieldShadow;
+      ctx.fillRect(10, -12, 7, 24);
+      ctx.fillStyle = flash ? "#fff" : PAL.shield;
+      ctx.fillRect(11, -10, 5, 20);
+      ctx.fillStyle = flash ? "#fff" : PAL.shieldFace;
+      ctx.fillRect(11, -10, 2, 12);
+      ctx.fillStyle = flash ? "#fff" : RAMP.gold[1];
+      ctx.fillRect(12, -4, 3, 3);
+      ctx.fillRect(13, -6, 1, 7);
+      ctx.fillRect(11, -3, 5, 1);
+      if (!flash) {
+        ctx.fillStyle = RAMP.gold[0];
+        ctx.fillRect(13, -6, 1, 1);
+      }
+      ctx.fillStyle = flash ? "#fff" : PAL.shieldRim;
+      ctx.fillRect(10, -12, 1, 24);
+      ctx.fillRect(10, -12, 7, 1);
+      ctx.fillStyle = flash ? "#fff" : PAL.shieldShadow;
+      ctx.fillRect(16, -12, 1, 24);
+      ctx.fillRect(10, 11, 7, 1);
+      ctx.fillStyle = "rgba(100,180,240,0.2)";
+      ctx.fillRect(6, -16, 16, 32);
+      ctx.globalAlpha = 0.15 + Math.sin(globalTime * 12) * 0.1;
+      ctx.fillStyle = "#aaddff";
+      ctx.fillRect(10, -12, 7, 24);
+      ctx.globalAlpha = 1;
+      ctx.restore();
+    } else {
+      ctx.save();
+      ctx.translate(px, py);
+      ctx.rotate(a + 0.5);
+      ctx.fillStyle = flash ? "#fff" : PAL.shieldShadow;
+      ctx.fillRect(10, -7, 5, 14);
+      ctx.fillStyle = flash ? "#fff" : PAL.shield;
+      ctx.fillRect(11, -5, 3, 10);
+      ctx.fillStyle = flash ? "#fff" : PAL.shieldFace;
+      ctx.fillRect(11, -5, 1, 5);
+      ctx.fillStyle = flash ? "#fff" : PAL.shieldEmblem;
+      ctx.fillRect(12, -1, 1, 2);
+      ctx.restore();
+    }
+
+    // Player warm light glow
+    if (!iframeFlicker) {
+      ctx.globalAlpha = 0.06;
+      const plG = ctx.createRadialGradient(px, py, 5, px, py, 50);
+      plG.addColorStop(0, "#ffcc88");
+      plG.addColorStop(1, "rgba(255,200,120,0)");
+      ctx.fillStyle = plG;
+      ctx.fillRect(px - 50, py - 50, 100, 100);
+      ctx.globalAlpha = 1;
+    }
+
+    return; // Skip procedural drawing
+  }
+
+  // ========== PROCEDURAL FALLBACK BELOW ==========
+
   // --- AFTERIMAGE TRAIL (dash ghost copies) ---
   if (player.trail.length > 0) {
     for (let i = 0; i < player.trail.length; i++) {
@@ -417,8 +612,7 @@ export function drawPlayer(ctx) {
   ctx.ellipse(0, 9, 11, 4, 0, 0, Math.PI * 2);
   ctx.fill();
 
-  const flash = player.hurtFlash > 0;
-  const iframeFlicker = player.iFrames > 0 && Math.floor(player.iFrames * 20) % 2 === 0;
+  // flash and iframeFlicker already declared above
   if (iframeFlicker) ctx.globalAlpha = 0.4;
 
   // --- BOOTS with detailed pixel art ---
