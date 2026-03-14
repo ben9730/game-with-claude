@@ -2,7 +2,7 @@
 
 import { TILE, PAL, RAMP, W, H } from './config.js';
 import { rand } from './utils.js';
-import { getRoomState } from './rooms.js';
+import { getRoomState, getWallSegments } from './rooms.js';
 import { getGlobalTime } from './main.js';
 import { player } from './player.js';
 
@@ -78,7 +78,7 @@ export function updateFog(dt) {
     if (f.y > roomOffY + roomPxH + f.size) f.y = roomOffY - f.size;
   }
 
-  // Update smoke particles
+  // Update smoke
   for (let i = smokeParticles.length - 1; i >= 0; i--) {
     const s = smokeParticles[i];
     s.x += s.vx * dt;
@@ -88,7 +88,7 @@ export function updateFog(dt) {
     if (s.life <= 0) smokeParticles.splice(i, 1);
   }
 
-  // Spawn new smoke from torches
+  // Spawn smoke from torches
   for (const torch of torches) {
     if (Math.random() < dt * 3) {
       smokeParticles.push({
@@ -107,47 +107,18 @@ export function updateFog(dt) {
 // ============================================================
 // MULTI-FRAME TORCH FLAME (4 frames cycling)
 // ============================================================
-// Each flame frame is a small pixel pattern using fire color ramp
 const FLAME_FRAMES = [
-  // Frame 0
-  [
-    "00100",
-    "01210",
-    "12321",
-    "12321",
-    "01210",
-  ],
-  // Frame 1
-  [
-    "01000",
-    "01210",
-    "12321",
-    "12321",
-    "01210",
-  ],
-  // Frame 2
-  [
-    "00010",
-    "01210",
-    "13231",
-    "12321",
-    "01210",
-  ],
-  // Frame 3
-  [
-    "00100",
-    "01310",
-    "12321",
-    "13231",
-    "01210",
-  ],
+  ["00100", "01210", "12321", "12321", "01210"],
+  ["01000", "01210", "12321", "12321", "01210"],
+  ["00010", "01210", "13231", "12321", "01210"],
+  ["00100", "01310", "12321", "13231", "01210"],
 ];
 
 const FIRE_COLORS = [
-  "transparent",      // 0
-  RAMP.fire[2],       // 1 - orange
-  RAMP.fire[1],       // 2 - yellow
-  RAMP.fire[0],       // 3 - white-yellow
+  "transparent",
+  RAMP.fire[2],
+  RAMP.fire[1],
+  RAMP.fire[0],
 ];
 
 export function drawTorches(ctx) {
@@ -155,20 +126,15 @@ export function drawTorches(ctx) {
   for (const torch of torches) {
     const t = globalTime + torch.flicker;
     const flicker = Math.sin(t * 12) * 0.15 + Math.sin(t * 7.3) * 0.1 + Math.cos(t * 19) * 0.05;
-    const intensity = torch.intensity + flicker;
 
-    // Torch bracket (metal detail)
-    // Bracket arm
+    // Torch bracket
     ctx.fillStyle = PAL.torchBracket;
     ctx.fillRect(torch.x - 4, torch.y + 1, 8, 3);
     ctx.fillRect(torch.x - 2, torch.y - 1, 4, 2);
-    // Bracket highlight
     ctx.fillStyle = PAL.torchBracketLight;
     ctx.fillRect(torch.x - 4, torch.y + 1, 8, 1);
-    // Bracket shadow
     ctx.fillStyle = RAMP.steel[4];
     ctx.fillRect(torch.x - 4, torch.y + 3, 8, 1);
-    // Bracket rivets
     ctx.fillStyle = RAMP.steel[0];
     ctx.fillRect(torch.x - 3, torch.y + 2, 1, 1);
     ctx.fillRect(torch.x + 3, torch.y + 2, 1, 1);
@@ -185,14 +151,12 @@ export function drawTorches(ctx) {
     const frameIndex = Math.floor(t * 6) % 4;
     const frame = FLAME_FRAMES[frameIndex];
     const flameScale = 2;
-    const flameW = 5;
-    const flameH = 5;
     const fh = 6 + flicker * 3;
-    const flameX = torch.x - Math.floor(flameW * flameScale / 2);
+    const flameX = torch.x - Math.floor(5 * flameScale / 2);
     const flameY = torch.y - 4 - fh;
 
-    for (let fy = 0; fy < flameH; fy++) {
-      for (let fx = 0; fx < flameW; fx++) {
+    for (let fy = 0; fy < 5; fy++) {
+      for (let fx = 0; fx < 5; fx++) {
         const ci = parseInt(frame[fy][fx]);
         if (ci === 0) continue;
         ctx.fillStyle = FIRE_COLORS[ci];
@@ -200,25 +164,25 @@ export function drawTorches(ctx) {
       }
     }
 
-    // Flame tip (extra bright)
+    // Flame tip
     ctx.fillStyle = RAMP.fire[0];
     ctx.fillRect(torch.x - 1, flameY - 1, 2, 2);
     // Flame base glow
     ctx.fillStyle = RAMP.fire[3];
     ctx.fillRect(torch.x - 2, torch.y - 5, 4, 2);
 
-    // Light glow (warm tint)
+    // Warm glow on nearby surfaces (subtle, before lighting pass)
+    const intensity = torch.intensity + flicker;
     const glowR = torch.baseRadius * (0.9 + flicker * 0.3);
-    const glow = ctx.createRadialGradient(torch.x, torch.y - 4, 2, torch.x, torch.y - 4, glowR);
-    glow.addColorStop(0, `rgba(255,170,70,${0.12 * intensity})`);
-    glow.addColorStop(0.3, `rgba(255,140,50,${0.08 * intensity})`);
-    glow.addColorStop(0.6, `rgba(255,110,30,${0.04 * intensity})`);
+    const glow = ctx.createRadialGradient(torch.x, torch.y - 4, 2, torch.x, torch.y - 4, glowR * 0.5);
+    glow.addColorStop(0, `rgba(255,170,70,${0.08 * intensity})`);
+    glow.addColorStop(0.5, `rgba(255,140,50,${0.04 * intensity})`);
     glow.addColorStop(1, "rgba(255,100,20,0)");
     ctx.fillStyle = glow;
-    ctx.fillRect(torch.x - glowR, torch.y - 4 - glowR, glowR * 2, glowR * 2);
+    ctx.fillRect(torch.x - glowR * 0.5, torch.y - 4 - glowR * 0.5, glowR, glowR);
   }
 
-  // Draw smoke particles
+  // Smoke
   for (const s of smokeParticles) {
     ctx.globalAlpha = s.alpha;
     ctx.fillStyle = "rgba(80,70,90,0.8)";
@@ -238,66 +202,147 @@ export function drawFog(ctx) {
   ctx.globalAlpha = 1;
 }
 
-let _darkCanvas = null;
+// ============================================================
+// SHADOW CASTING — visibility polygon
+// ============================================================
 
-export function drawDarknessOverlay(ctx) {
-  const globalTime = getGlobalTime();
-  if (!_darkCanvas) {
-    _darkCanvas = document.createElement("canvas");
-    _darkCanvas.width = W;
-    _darkCanvas.height = H;
-  }
-  const darkCanvas = _darkCanvas;
-  const dctx = darkCanvas.getContext("2d");
-
-  // Use multiply blend for more natural darkness
-  dctx.clearRect(0, 0, W, H);
-
-  // Base darkness layer
-  dctx.fillStyle = "rgba(5,3,15,0.55)";
-  dctx.fillRect(0, 0, W, H);
-
-  dctx.globalCompositeOperation = "destination-out";
-
-  // Player light with warm tint
-  const plGrad = dctx.createRadialGradient(player.x, player.y, 8, player.x, player.y, 145);
-  plGrad.addColorStop(0, "rgba(0,0,0,1)");
-  plGrad.addColorStop(0.4, "rgba(0,0,0,0.8)");
-  plGrad.addColorStop(0.7, "rgba(0,0,0,0.4)");
-  plGrad.addColorStop(1, "rgba(0,0,0,0)");
-  dctx.fillStyle = plGrad;
-  dctx.fillRect(0, 0, W, H);
-
-  // Torch lights
-  for (const torch of torches) {
-    const t = globalTime + torch.flicker;
-    const flicker = Math.sin(t * 12) * 0.1 + Math.sin(t * 7.3) * 0.05;
-    const r = torch.baseRadius * (0.8 + flicker * 0.2);
-    const tGrad = dctx.createRadialGradient(torch.x, torch.y - 4, 3, torch.x, torch.y - 4, r);
-    tGrad.addColorStop(0, "rgba(0,0,0,0.9)");
-    tGrad.addColorStop(0.5, "rgba(0,0,0,0.5)");
-    tGrad.addColorStop(0.8, "rgba(0,0,0,0.2)");
-    tGrad.addColorStop(1, "rgba(0,0,0,0)");
-    dctx.fillStyle = tGrad;
-    dctx.fillRect(torch.x - r, torch.y - 4 - r, r * 2, r * 2);
-  }
-
-  dctx.globalCompositeOperation = "source-over";
-
-  // Add warm tint to the darkness (not pure black)
-  dctx.globalCompositeOperation = "source-atop";
-  dctx.fillStyle = "rgba(10,5,20,0.15)";
-  dctx.fillRect(0, 0, W, H);
-  dctx.globalCompositeOperation = "source-over";
-
-  ctx.drawImage(darkCanvas, 0, 0);
+// Ray-segment intersection
+function rayIntersect(rx, ry, rdx, rdy, seg) {
+  const sdx = seg.bx - seg.ax;
+  const sdy = seg.by - seg.ay;
+  const denom = sdx * rdy - sdy * rdx;
+  if (Math.abs(denom) < 0.0001) return null;
+  const t2 = (rdx * (seg.ay - ry) + rdy * (rx - seg.ax)) / denom;
+  const t1 = (sdx !== 0) ? (seg.ax + sdx * t2 - rx) / rdx : (seg.ay + sdy * t2 - ry) / rdy;
+  if (t1 < 0 || t2 < 0 || t2 > 1) return null;
+  return { x: rx + rdx * t1, y: ry + rdy * t1, t1 };
 }
 
-export function drawVignette(ctx) {
-  const vg = ctx.createRadialGradient(W / 2, H / 2, 150, W / 2, H / 2, 450);
-  vg.addColorStop(0, "rgba(0,0,0,0)");
-  vg.addColorStop(0.7, "rgba(0,0,0,0.15)");
-  vg.addColorStop(1, "rgba(0,0,0,0.45)");
-  ctx.fillStyle = vg;
-  ctx.fillRect(0, 0, W, H);
+// Compute visibility polygon for a light source
+function getVisibilityPolygon(lx, ly, maxRadius) {
+  const segments = getWallSegments();
+  // Collect unique endpoints within range
+  const seen = new Set();
+  const angles = [];
+
+  for (const seg of segments) {
+    const dx1 = seg.ax - lx, dy1 = seg.ay - ly;
+    const dx2 = seg.bx - lx, dy2 = seg.by - ly;
+    // Only consider endpoints within radius
+    if (dx1*dx1 + dy1*dy1 < maxRadius * maxRadius * 1.5) {
+      const key1 = `${seg.ax},${seg.ay}`;
+      if (!seen.has(key1)) {
+        seen.add(key1);
+        const a = Math.atan2(dy1, dx1);
+        angles.push(a - 0.0001, a, a + 0.0001);
+      }
+    }
+    if (dx2*dx2 + dy2*dy2 < maxRadius * maxRadius * 1.5) {
+      const key2 = `${seg.bx},${seg.by}`;
+      if (!seen.has(key2)) {
+        seen.add(key2);
+        const a = Math.atan2(dy2, dx2);
+        angles.push(a - 0.0001, a, a + 0.0001);
+      }
+    }
+  }
+
+  // Cast rays and find closest intersection
+  const intersections = [];
+  for (const angle of angles) {
+    const dx = Math.cos(angle);
+    const dy = Math.sin(angle);
+    let closest = null;
+    let closestT1 = Infinity;
+
+    for (const seg of segments) {
+      const hit = rayIntersect(lx, ly, dx, dy, seg);
+      if (hit && hit.t1 < closestT1) {
+        closestT1 = hit.t1;
+        closest = { x: hit.x, y: hit.y, angle };
+      }
+    }
+    if (closest) intersections.push(closest);
+  }
+
+  // Sort by angle
+  intersections.sort((a, b) => a.angle - b.angle);
+  return intersections;
+}
+
+// ============================================================
+// MULTIPLICATIVE LIGHTING — colored light, dark atmosphere
+// ============================================================
+let _lightCanvas = null;
+
+export function drawLightingOverlay(ctx) {
+  const globalTime = getGlobalTime();
+  if (!_lightCanvas) {
+    _lightCanvas = document.createElement("canvas");
+    _lightCanvas.width = W;
+    _lightCanvas.height = H;
+  }
+  const lctx = _lightCanvas.getContext("2d");
+
+  // Fill with ambient darkness — dark purple for atmosphere
+  lctx.globalCompositeOperation = "source-over";
+  lctx.fillStyle = "rgb(16, 10, 26)";
+  lctx.fillRect(0, 0, W, H);
+
+  // Additive: punch light sources into the dark
+  lctx.globalCompositeOperation = "lighter";
+
+  // Player light with shadow casting
+  const playerPoly = getVisibilityPolygon(player.x, player.y, 160);
+  if (playerPoly.length > 2) {
+    lctx.save();
+    lctx.beginPath();
+    lctx.moveTo(playerPoly[0].x, playerPoly[0].y);
+    for (let i = 1; i < playerPoly.length; i++) {
+      lctx.lineTo(playerPoly[i].x, playerPoly[i].y);
+    }
+    lctx.closePath();
+    lctx.clip();
+
+    // Draw player light gradient (only in visible areas)
+    const plGrad = lctx.createRadialGradient(player.x, player.y, 4, player.x, player.y, 155);
+    plGrad.addColorStop(0, "rgb(190, 170, 145)");
+    plGrad.addColorStop(0.25, "rgb(140, 120, 100)");
+    plGrad.addColorStop(0.5, "rgb(80, 65, 50)");
+    plGrad.addColorStop(0.75, "rgb(30, 22, 16)");
+    plGrad.addColorStop(1, "rgb(0, 0, 0)");
+    lctx.fillStyle = plGrad;
+    lctx.fillRect(0, 0, W, H);
+
+    lctx.restore();
+  }
+
+  // Torch lights — warm orange with flicker
+  for (const torch of torches) {
+    const t = globalTime + torch.flicker;
+    const flicker = Math.sin(t * 12) * 0.12 + Math.sin(t * 7.3) * 0.08;
+    const r = torch.baseRadius * (0.85 + flicker * 0.25);
+    const intensity = torch.intensity + flicker;
+
+    // Warm orange-yellow light
+    const ri = Math.min(255, (200 * intensity) | 0);
+    const gi = Math.min(255, (130 * intensity) | 0);
+    const bi = Math.min(255, (55 * intensity) | 0);
+
+    const tGrad = lctx.createRadialGradient(torch.x, torch.y - 4, 2, torch.x, torch.y - 4, r);
+    tGrad.addColorStop(0, `rgb(${ri}, ${gi}, ${bi})`);
+    tGrad.addColorStop(0.35, `rgb(${ri >> 1}, ${gi >> 1}, ${bi >> 1})`);
+    tGrad.addColorStop(0.65, `rgb(${ri >> 2}, ${gi >> 2}, ${bi >> 2})`);
+    tGrad.addColorStop(1, "rgb(0, 0, 0)");
+    lctx.fillStyle = tGrad;
+    lctx.fillRect(torch.x - r, torch.y - 4 - r, r * 2, r * 2);
+  }
+
+  // Reset composite mode
+  lctx.globalCompositeOperation = "source-over";
+
+  // Composite light map onto main canvas with MULTIPLY
+  ctx.globalCompositeOperation = "multiply";
+  ctx.drawImage(_lightCanvas, 0, 0);
+  ctx.globalCompositeOperation = "source-over";
 }

@@ -4,6 +4,7 @@ import { PAL, RAMP, STATE } from './config.js';
 import { rand, dist, angle, angleDiff, lerp, moveWithCollision } from './utils.js';
 import { triggerShake } from './camera.js';
 import { spawnParticles, spawnDeathExplosion } from './particles.js';
+import { triggerHitStop, triggerSlowMo, triggerScreenFlash, triggerChroma, spawnDamageNumber } from './effects.js';
 import { player, damagePlayer } from './player.js';
 import { getRoomState, setDoorOpen, setDoorAnimState, setDoorAnimTimer } from './rooms.js';
 import { getGlobalTime, getStats, setGameState } from './main.js';
@@ -69,12 +70,20 @@ export function damageEnemy(e, amount) {
   e.hp -= amount;
   e.flashTimer = 0.1;
   spawnParticles(e.x, e.y, 5, PAL.particleHit, 70, 0.2, 3);
+  // Damage number popup
+  spawnDamageNumber(e.x, e.y - e.radius - 5, amount, e.type === "boss" ? "#ff6644" : "#ffffff");
   if (e.hp <= 0) {
     e.dead = true;
     const stats = getStats();
     stats.enemiesKilled++;
     spawnDeathExplosion(e.x, e.y, e.type);
     triggerShake(e.type === "boss" ? 12 : 5, e.type === "boss" ? 0.4 : 0.15);
+    triggerHitStop(e.type === "boss" ? 8 : 5);
+    triggerScreenFlash(e.type === "boss" ? "#ffffff" : "#ffddaa", e.type === "boss" ? 0.4 : 0.15);
+    if (e.type === "boss") {
+      triggerSlowMo(0.2, 0.6);
+      triggerChroma(6, 4);
+    }
     if (e.type !== "boss" && Math.random() < 0.3) {
       const roll = Math.random();
       let puType = "health";
@@ -196,6 +205,10 @@ export function drawEnemy(ctx, e) {
 
   ctx.save();
   ctx.translate(px, py);
+
+  // Idle breathing — subtle sine-wave scale (each enemy has unique phase from position)
+  const breathe = 1 + Math.sin(globalTime * 2 + e.x * 0.1 + e.y * 0.07) * 0.02;
+  ctx.scale(breathe, 1 / breathe); // conserve volume
 
   // Shadow
   ctx.fillStyle = PAL.shadow;

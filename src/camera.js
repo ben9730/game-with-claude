@@ -1,28 +1,35 @@
 "use strict";
 
-import { rand } from './utils.js';
-import { getGlobalTime } from './main.js';
+// Trauma-based camera shake — trauma² gives organic feel
+// Small hits barely shake, big hits shake violently
 
 export let shakeX = 0;
 export let shakeY = 0;
-let shakeIntensity = 0;
-let shakeDuration = 0;
 
-export function triggerShake(intensity, duration) {
-  shakeIntensity = intensity;
-  shakeDuration = duration;
+let trauma = 0;
+const MAX_SHAKE = 12;
+const TRAUMA_DECAY = 2.0; // per second
+
+export function addTrauma(amount) {
+  trauma = Math.min(1, trauma + amount);
+}
+
+// Legacy compat — old code calls triggerShake(intensity, duration)
+export function triggerShake(intensity, _duration) {
+  // Map old intensity to trauma: intensity 4 → 0.25, 8 → 0.5, 12 → 0.75
+  addTrauma(intensity / 16);
 }
 
 export function updateShake(dt) {
-  if (shakeDuration > 0) {
-    shakeDuration -= dt;
-    const globalTime = getGlobalTime();
-    // Enhanced shake with high-frequency noise
-    const freq = globalTime * 40;
-    shakeX = Math.sin(freq) * shakeIntensity * rand(0.6, 1.0);
-    shakeY = Math.cos(freq * 1.3) * shakeIntensity * rand(0.6, 1.0);
-    shakeIntensity *= 0.90;
+  if (trauma > 0.001) {
+    const t = performance.now() * 0.001;
+    const shake = trauma * trauma * MAX_SHAKE;
+    // Multiple sine waves at different frequencies = organic noise
+    shakeX = shake * (Math.sin(t * 25.7) * 0.5 + Math.sin(t * 42.3) * 0.3 + Math.cos(t * 67.1) * 0.2);
+    shakeY = shake * (Math.cos(t * 31.3) * 0.5 + Math.sin(t * 53.7) * 0.3 + Math.cos(t * 79.9) * 0.2);
+    trauma = Math.max(0, trauma - TRAUMA_DECAY * dt);
   } else {
     shakeX = shakeY = 0;
+    trauma = 0;
   }
 }

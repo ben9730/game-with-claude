@@ -4,7 +4,8 @@ import { TILE, PAL, RAMP, W, H } from './config.js';
 import { rand, randInt } from './utils.js';
 import { createEnemy } from './enemies.js';
 import { player } from './player.js';
-import { generateTorches, initFog, drawTorches, drawFog, drawDarknessOverlay, drawVignette } from './lighting.js';
+import { generateTorches, initFog, drawTorches, drawFog, torches } from './lighting.js';
+import { initEmbers } from './effects.js';
 
 export let rooms = [];
 export let currentRoom = 0;
@@ -18,8 +19,13 @@ export let doorAnimState = 0;
 export let bossEntranceTimer = 0;
 export let bossEntranceActive = false;
 
+// Wall segments for shadow casting (computed once per room load)
+let wallSegments = [];
+export function getWallSegments() { return wallSegments; }
+
 let floorDetails = [];
 let wallDetails = [];
+let _roomBgCanvas = null;
 
 export let enemies = [];
 export let projectiles = [];
@@ -135,6 +141,10 @@ export function loadRoom(index) {
   generateFloorDetails();
   generateWallTileCache();
   initFog();
+  initEmbers(torches);
+
+  computeWallSegments();
+  bakeRoomBackground();
 
   if (room.isBoss) {
     bossEntranceActive = true;
@@ -326,7 +336,21 @@ function drawDithered2(ctx, x, y, w, h, color1, color2) {
   }
 }
 
-export function drawRoom(ctx) {
+// ============================================================
+// PRE-RENDERED ROOM BACKGROUND CACHE
+// ============================================================
+function bakeRoomBackground() {
+  if (!_roomBgCanvas) {
+    _roomBgCanvas = document.createElement("canvas");
+  }
+  _roomBgCanvas.width = W;
+  _roomBgCanvas.height = H;
+  const ctx = _roomBgCanvas.getContext("2d");
+
+  // Fill entire canvas with background color
+  ctx.fillStyle = PAL.bg;
+  ctx.fillRect(0, 0, W, H);
+
   // Floor and wall tiles
   for (let y = 0; y < roomH; y++) {
     for (let x = 0; x < roomW; x++) {
@@ -563,21 +587,24 @@ export function drawRoom(ctx) {
       ctx.globalAlpha = 1;
     }
   }
+}
 
-  // Door
+export function drawRoom(ctx) {
+  // Blit pre-rendered background (tiles, floor details, wall details)
+  ctx.drawImage(_roomBgCanvas, 0, 0);
+
+  // Door (dynamic - animated opening)
   drawDoor(ctx);
 
-  // Torches
+  // Torches (dynamic - flame animation)
   drawTorches(ctx);
 
-  // Fog
+  // Fog (dynamic - particles moving)
   drawFog(ctx);
 
-  // Darkness overlay
-  drawDarknessOverlay(ctx);
-
-  // Vignette
-  drawVignette(ctx);
+  // NOTE: Lighting overlay, vignette, bloom, and color grading
+  // are now applied in renderer.js AFTER entities and particles
+  // for proper layering (darkness covers everything, not just tiles)
 }
 
 function drawDoor(ctx) {
@@ -716,6 +743,35 @@ function drawDoor(ctx) {
     ctx.fillRect(doorPX + TILE / 2 - 2, doorPY + TILE / 2 - 4, 5, 1);
     ctx.fillRect(doorPX + TILE / 2 - 3, doorPY + TILE / 2 + 1, 1, 3);
     ctx.fillRect(doorPX + TILE / 2 + 3, doorPY + TILE / 2 + 1, 1, 3);
+  }
+}
+
+function computeWallSegments() {
+  wallSegments = [];
+  // Add room boundary segments
+  const rx = roomOffX, ry = roomOffY;
+  const rw = roomPxW, rh = roomPxH;
+  wallSegments.push({ax: rx, ay: ry, bx: rx + rw, by: ry});
+  wallSegments.push({ax: rx + rw, ay: ry, bx: rx + rw, by: ry + rh});
+  wallSegments.push({ax: rx + rw, ay: ry + rh, bx: rx, by: ry + rh});
+  wallSegments.push({ax: rx, ay: ry + rh, bx: rx, by: ry});
+
+  for (let y = 0; y < roomH; y++) {
+    for (let x = 0; x < roomW; x++) {
+      if (roomGrid[y][x] === 1) {
+        const px = roomOffX + x * TILE;
+        const py = roomOffY + y * TILE;
+        // Only add edges that border non-wall tiles
+        if (y > 0 && roomGrid[y-1][x] !== 1)
+          wallSegments.push({ax: px, ay: py, bx: px + TILE, by: py});
+        if (y < roomH-1 && roomGrid[y+1][x] !== 1)
+          wallSegments.push({ax: px, ay: py + TILE, bx: px + TILE, by: py + TILE});
+        if (x > 0 && roomGrid[y][x-1] !== 1)
+          wallSegments.push({ax: px, ay: py, bx: px, by: py + TILE});
+        if (x < roomW-1 && roomGrid[y][x+1] !== 1)
+          wallSegments.push({ax: px + TILE, ay: py, bx: px + TILE, by: py + TILE});
+      }
+    }
   }
 }
 

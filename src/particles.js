@@ -282,18 +282,42 @@ export function updateParticles(dt) {
     }
 
     p.life -= dt;
-    if (p.life <= 0) particles.splice(i, 1);
+    if (p.life <= 0) {
+      // Swap-and-pop: O(1) removal instead of O(n) splice
+      const last = particles.length - 1;
+      if (i !== last) particles[i] = particles[last];
+      particles.pop();
+    }
   }
 }
 
+// Types that use additive blend for glow-through-darkness effect
+const ADDITIVE_TYPES = { spark: 1, sparkle: 1, flash: 1 };
+
 export function drawParticles(ctx) {
+  // First pass: normal blend particles
   for (const p of particles) {
+    if (ADDITIVE_TYPES[p.ptype]) continue;
+    drawSingleParticle(ctx, p);
+  }
+  // Second pass: additive blend particles (glow)
+  ctx.globalCompositeOperation = "lighter";
+  for (const p of particles) {
+    if (!ADDITIVE_TYPES[p.ptype]) continue;
+    drawSingleParticle(ctx, p);
+  }
+  ctx.globalCompositeOperation = "source-over";
+  ctx.globalAlpha = 1;
+}
+
+function drawSingleParticle(ctx, p) {
     const alpha = clamp(p.life / p.maxLife, 0, 1);
     ctx.globalAlpha = alpha;
     ctx.fillStyle = p.color;
     const s = p.size * (p.ptype === "spark" ? 1 : (p.ptype === "flash" ? (1 - alpha) * 2 + 0.5 : alpha));
-    const px = Math.floor(p.x - s / 2);
-    const py = Math.floor(p.y - s / 2);
+    // Sub-pixel rendering for smooth motion (no Math.floor for particles)
+    const px = p.x - s / 2;
+    const py = p.y - s / 2;
 
     if (p.ptype === "bone") {
       ctx.save();
@@ -381,6 +405,4 @@ export function drawParticles(ctx) {
     } else {
       ctx.fillRect(px, py, Math.ceil(s), Math.ceil(s));
     }
-  }
-  ctx.globalAlpha = 1;
 }

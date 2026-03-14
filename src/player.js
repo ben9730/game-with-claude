@@ -5,6 +5,7 @@ import { angle, angleDiff, dist, moveWithCollision } from './utils.js';
 import { keys, mouse } from './input.js';
 import { triggerShake } from './camera.js';
 import { spawnParticles, spawnBlood, spawnSlashTrail, spawnMagicSparkle } from './particles.js';
+import { triggerHitStop, triggerSlowMo, triggerScreenFlash, spawnDamageNumber } from './effects.js';
 import { getRoomState } from './rooms.js';
 import { damageEnemy } from './enemies.js';
 import { startTransition } from './transitions.js';
@@ -29,6 +30,11 @@ export const player = {
   walkFrame: 0,
   walkTimer: 0,
   isMoving: false,
+  // Squash/stretch
+  scaleX: 1, scaleY: 1,
+  squashTimer: 0,
+  // Afterimage trail
+  trail: [],
 };
 
 export function resetPlayer() {
@@ -56,7 +62,12 @@ export function damagePlayer(amount) {
   player.hp -= amount;
   player.iFrames = 0.5;
   player.hurtFlash = 0.2;
+  player.squashTimer = 0.15;
+  player.scaleX = 1.3;
+  player.scaleY = 0.7;
   triggerShake(amount > 15 ? 8 : 4, 0.18);
+  triggerHitStop(amount > 15 ? 4 : 2);
+  triggerScreenFlash("#ff2222", 0.15);
   spawnBlood(player.x, player.y, 8);
   spawnParticles(player.x, player.y, 4, "#ff4444", 80, 0.3, 3);
   if (player.hp <= 0) {
@@ -87,6 +98,7 @@ function performSlash() {
   }
   if (hitSomething) {
     triggerShake(4, 0.12);
+    triggerHitStop(3);
     spawnBlood(player.x + Math.cos(slashAngle) * 25, player.y + Math.sin(slashAngle) * 25, 5);
   }
   spawnSlashTrail(player.x, player.y, slashAngle, player.attackArc);
@@ -127,6 +139,10 @@ export function updatePlayer(dt) {
     player.attacking = true;
     player.attackTimer = player.attackDuration;
     player.attackCooldown = player.attackCooldownMax;
+    // Attack stretch
+    player.scaleX = 1.2;
+    player.scaleY = 0.85;
+    player.squashTimer = 0.05;
     performSlash();
   }
 
@@ -144,6 +160,10 @@ export function updatePlayer(dt) {
     player.dashing = true;
     player.dashTimer = player.dashDuration;
     player.dashCooldown = player.dashCooldownMax;
+    player.trail = [];
+    // Stretch in dash direction
+    player.scaleX = 1.4;
+    player.scaleY = 0.7;
     let dx = 0, dy = 0;
     if (keys["w"]) dy -= 1;
     if (keys["s"]) dy += 1;
@@ -173,6 +193,23 @@ export function updatePlayer(dt) {
     if (len > 0) { vx /= len; vy /= len; }
     vx *= player.speed;
     vy *= player.speed;
+  }
+
+  // Record afterimage trail during dash
+  if (player.dashing) {
+    player.trail.push({ x: player.x, y: player.y });
+    if (player.trail.length > 6) player.trail.shift();
+  } else if (player.trail.length > 0) {
+    // Fade out trail after dash ends
+    if (player.trail.length > 0) player.trail.shift();
+  }
+
+  // Squash/stretch spring back
+  if (player.squashTimer > 0) {
+    player.squashTimer -= dt;
+  } else {
+    player.scaleX += (1 - player.scaleX) * 0.15;
+    player.scaleY += (1 - player.scaleY) * 0.15;
   }
 
   player.isMoving = (vx !== 0 || vy !== 0);
@@ -355,8 +392,24 @@ export function drawPlayer(ctx) {
   const walkBob = player.isMoving ? Math.sin(player.walkTimer * 10) * 2 : 0;
   const legOffset = player.isMoving ? Math.sin(player.walkTimer * 10) * 3 : 0;
 
+  // --- AFTERIMAGE TRAIL (dash ghost copies) ---
+  if (player.trail.length > 0) {
+    for (let i = 0; i < player.trail.length; i++) {
+      const t = player.trail[i];
+      const trailAlpha = 0.3 * (1 - i / player.trail.length);
+      ctx.globalAlpha = trailAlpha;
+      ctx.fillStyle = "#4488cc";
+      ctx.fillRect(t.x - 8, t.y - 12, 16, 24);
+      ctx.fillRect(t.x - 6, t.y - 16, 12, 8);
+    }
+    ctx.globalAlpha = 1;
+  }
+
   ctx.save();
   ctx.translate(px, py + walkBob * 0.3);
+
+  // Apply squash/stretch
+  ctx.scale(player.scaleX, player.scaleY);
 
   // Shadow
   ctx.fillStyle = PAL.shadow;
