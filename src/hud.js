@@ -327,4 +327,47 @@ export function drawHUD(ctx) {
     ctx.fillRect(0, 0, W, 3);
     ctx.fillRect(0, H - 3, W, 3);
   }
+
+  // FPS counter (debug)
+  drawFPS(ctx);
 }
+
+// ============================================================
+// FPS COUNTER — shows if stutter is game or computer
+// ============================================================
+let _fpsFrames = 0;
+let _fpsLast = performance.now();
+let _fpsDisplay = 60;
+let _fpsMin = 999;
+let _fpsResetTimer = 0;
+
+function drawFPS(ctx) {
+  _fpsFrames++;
+  const now = performance.now();
+  const elapsed = now - _fpsLast;
+
+  // Measure per-frame time for min FPS
+  const frameFps = 1000 / Math.max(1, now - (_fpsPrevFrame || now));
+  _fpsPrevFrame = now;
+  if (_fpsFrames > 2) _fpsMin = Math.min(_fpsMin, frameFps);
+
+  if (elapsed >= 500) {
+    _fpsDisplay = Math.round(_fpsFrames / (elapsed / 1000));
+    _fpsFrames = 0;
+    _fpsLast = now;
+    _fpsResetTimer += 0.5;
+    if (_fpsResetTimer >= 3) {
+      _fpsResetTimer = 0;
+      _fpsMin = 999;
+    }
+  }
+
+  const color = _fpsDisplay >= 55 ? "#44ff44" : _fpsDisplay >= 30 ? "#ffaa33" : "#ff3333";
+  ctx.fillStyle = "rgba(0,0,0,0.5)";
+  ctx.fillRect(W - 80, H - 28, 76, 24);
+  ctx.fillStyle = color;
+  ctx.font = "bold 10px monospace";
+  ctx.textAlign = "right";
+  ctx.fillText(`FPS: ${_fpsDisplay} min:${Math.round(_fpsMin)}`, W - 8, H - 12);
+}
+let _fpsPrevFrame = 0;
