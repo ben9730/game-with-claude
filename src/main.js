@@ -143,6 +143,11 @@ function gameLoop(timestamp) {
   updateFogLayers(rawDt);
   updateFreezeTimer(rawDt);
 
+  // Disable touch gameplay controls when not playing
+  if (gameState !== STATE.PLAYING && gameState !== STATE.TRANSITION) {
+    setTouchGameplayMode(false);
+  }
+
   // Update game logic
   switch (gameState) {
     case STATE.TITLE:

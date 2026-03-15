@@ -24,6 +24,28 @@ export function setAnyKeyPressed(val) {
   anyKeyPressed = val;
 }
 
+// Shared coordinate mapping for object-fit: contain
+function canvasCoordsFromClient(canvas, clientX, clientY) {
+  const r = canvas.getBoundingClientRect();
+  const canvasAspect = W / H;
+  const elemAspect = r.width / r.height;
+  let renderW, renderH, offsetX, offsetY;
+  if (elemAspect > canvasAspect) {
+    renderH = r.height; renderW = r.height * canvasAspect;
+    offsetX = (r.width - renderW) / 2; offsetY = 0;
+  } else {
+    renderW = r.width; renderH = r.width / canvasAspect;
+    offsetX = 0; offsetY = (r.height - renderH) / 2;
+  }
+  return {
+    x: ((clientX - r.left - offsetX) / renderW) * W,
+    y: ((clientY - r.top - offsetY) / renderH) * H,
+  };
+}
+
+// Track if real touch is active — ignore synthetic mouse events on touch devices
+let _touchActive = false;
+
 export function initInput(canvas) {
   document.addEventListener("keydown", e => {
     keys[e.key.toLowerCase()] = true;
@@ -31,28 +53,21 @@ export function initInput(canvas) {
     if (e.key === " " || e.key.startsWith("Arrow")) e.preventDefault();
   });
   document.addEventListener("keyup", e => { keys[e.key.toLowerCase()] = false; });
+
   canvas.addEventListener("mousemove", e => {
-    const r = canvas.getBoundingClientRect();
-    // Account for object-fit: contain (letterboxing/pillarboxing)
-    const canvasAspect = W / H;
-    const elemAspect = r.width / r.height;
-    let renderW, renderH, offsetX, offsetY;
-    if (elemAspect > canvasAspect) {
-      renderH = r.height; renderW = r.height * canvasAspect;
-      offsetX = (r.width - renderW) / 2; offsetY = 0;
-    } else {
-      renderW = r.width; renderH = r.width / canvasAspect;
-      offsetX = 0; offsetY = (r.height - renderH) / 2;
-    }
-    mouse.x = ((e.clientX - r.left - offsetX) / renderW) * W;
-    mouse.y = ((e.clientY - r.top - offsetY) / renderH) * H;
+    if (_touchActive) return; // Ignore synthetic mouse events from touch
+    const pos = canvasCoordsFromClient(canvas, e.clientX, e.clientY);
+    mouse.x = pos.x;
+    mouse.y = pos.y;
   });
   canvas.addEventListener("mousedown", e => {
+    if (_touchActive) return; // Ignore synthetic mouse events from touch
     e.preventDefault();
     if (e.button === 0) { mouse.left = true; mouseClicked = true; anyKeyPressed = true; }
     if (e.button === 2) mouse.right = true;
   });
   canvas.addEventListener("mouseup", e => {
+    if (_touchActive) return;
     if (e.button === 0) mouse.left = false;
     if (e.button === 2) mouse.right = false;
   });
@@ -60,6 +75,13 @@ export function initInput(canvas) {
 
   // Initialize touch controls
   initTouch(canvas);
-  setTouchTapCallback(() => { anyKeyPressed = true; mouseClicked = true; });
+  setTouchTapCallback(() => {
+    _touchActive = true;
+    anyKeyPressed = true;
+    mouseClicked = true;
+    // Ensure mouse.left doesn't get stuck on touch devices
+    mouse.left = false;
+    mouse.right = false;
+  });
   setTouchMouseCallback((x, y) => { mouse.x = x; mouse.y = y; });
 }
