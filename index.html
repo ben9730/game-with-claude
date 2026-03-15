@@ -2,18 +2,74 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
+<meta name="screen-orientation" content="landscape">
 <title>Depths of the Dark Keep</title>
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
-body { background: #0a0a0f; display: flex; justify-content: center; align-items: center; height: 100vh; overflow: hidden; touch-action: none; -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
-canvas { display: block; cursor: crosshair; image-rendering: pixelated; image-rendering: crisp-edges; width: 100vw; height: 100vh; object-fit: contain; }
+body { background: #0a0a0f; display: flex; justify-content: center; align-items: center; height: 100vh; height: 100dvh; overflow: hidden; touch-action: none; -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
+canvas { display: block; cursor: crosshair; image-rendering: pixelated; image-rendering: crisp-edges; width: 100vw; height: 100vh; height: 100dvh; object-fit: contain; }
+
+/* Rotate-device overlay for portrait mobile */
+#rotate-msg {
+  display: none;
+  position: fixed; inset: 0; z-index: 9999;
+  background: #0a0a0f;
+  color: #c8a85c;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  font-family: monospace;
+  text-align: center;
+  gap: 20px;
+}
+#rotate-msg .phone-icon {
+  font-size: 64px;
+  animation: rotateHint 2s ease-in-out infinite;
+}
+@keyframes rotateHint {
+  0%, 100% { transform: rotate(0deg); }
+  30%, 70% { transform: rotate(90deg); }
+}
+#rotate-msg p { font-size: 16px; padding: 0 30px; line-height: 1.5; }
+#rotate-msg .dismiss { font-size: 12px; color: #666; margin-top: 10px; cursor: pointer; }
+
+@media (orientation: portrait) and (max-width: 900px) {
+  #rotate-msg { display: flex; }
+  #game { display: none; }
+}
+@media (orientation: landscape), (min-width: 901px) {
+  #rotate-msg { display: none !important; }
+  #game { display: block; }
+}
 </style>
 </head>
 <body>
+<div id="rotate-msg">
+  <div class="phone-icon">📱</div>
+  <p>Rotate your device to<br><strong>landscape mode</strong><br>to play</p>
+  <div class="dismiss" onclick="this.parentElement.style.display='none'; document.getElementById('game').style.display='block';">
+    or tap here to play anyway
+  </div>
+</div>
 <canvas id="game"></canvas>
+<script>
+  // Try to lock orientation to landscape on supported browsers
+  if (screen.orientation && screen.orientation.lock) {
+    screen.orientation.lock('landscape').catch(() => {});
+  }
+  // Request fullscreen on first touch for mobile (hides browser chrome)
+  document.addEventListener('touchstart', function onFirstTouch() {
+    if (document.documentElement.requestFullscreen) {
+      document.documentElement.requestFullscreen().catch(() => {});
+    } else if (document.documentElement.webkitRequestFullscreen) {
+      document.documentElement.webkitRequestFullscreen();
+    }
+    document.removeEventListener('touchstart', onFirstTouch);
+  }, { once: true });
+</script>
 <script type="module" src="src/main.js"></script>
 </body>
 </html>
