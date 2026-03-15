@@ -84,9 +84,7 @@ export function damageEnemy(e, amount) {
     if (e.type === "boss") {
       triggerSlowMo(0.2, 0.6);
       triggerChroma(6, 4);
-      triggerFreezeFrame(0.15, true);
-    } else {
-      triggerFreezeFrame(0.05, false);
+      triggerFreezeFrame(0.12, true);
     }
     if (e.type !== "boss" && Math.random() < 0.3) {
       const roll = Math.random();

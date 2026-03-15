@@ -448,7 +448,7 @@ export function drawVignette(ctx) {
 // SCREEN-SPACE RAIN — atmospheric dripping water in dungeon
 // ============================================================
 const rainDrops = [];
-const RAIN_COUNT = 60;
+const RAIN_COUNT = 120;
 let rainInited = false;
 
 function initRain() {
@@ -456,10 +456,10 @@ function initRain() {
     rainDrops.push({
       x: Math.random() * W,
       y: Math.random() * H,
-      speed: 200 + Math.random() * 300,
-      length: 4 + Math.random() * 8,
-      alpha: 0.03 + Math.random() * 0.06,
-      drift: -10 + Math.random() * 20,
+      speed: 250 + Math.random() * 350,
+      length: 6 + Math.random() * 12,
+      alpha: 0.06 + Math.random() * 0.10,
+      drift: -15 + Math.random() * 30,
     });
   }
   rainInited = true;
@@ -508,14 +508,15 @@ function buildFogLayer(alpha, scale) {
   c.width = W;
   c.height = H;
   const cx = c.getContext("2d");
-  // Soft blob-based fog
-  for (let i = 0; i < 12; i++) {
+  // Soft blob-based fog — denser, more visible
+  for (let i = 0; i < 18; i++) {
     const bx = Math.random() * W;
     const by = Math.random() * H;
-    const br = 60 + Math.random() * 120;
+    const br = 80 + Math.random() * 160;
     const g = cx.createRadialGradient(bx, by, 0, bx, by, br * scale);
-    g.addColorStop(0, `rgba(100,90,130,${alpha})`);
-    g.addColorStop(1, "rgba(100,90,130,0)");
+    g.addColorStop(0, `rgba(90,80,120,${alpha * 2.5})`);
+    g.addColorStop(0.5, `rgba(90,80,120,${alpha * 1.2})`);
+    g.addColorStop(1, "rgba(90,80,120,0)");
     cx.fillStyle = g;
     cx.fillRect(bx - br, by - br, br * 2, br * 2);
   }
@@ -588,10 +589,10 @@ export function updateFreezeTimer(dt) {
 export function drawSpeedLines(ctx, playerX, playerY, dashDir, intensity) {
   if (intensity <= 0) return;
   ctx.save();
-  ctx.globalAlpha = intensity * 0.15;
-  ctx.strokeStyle = "#ffffff";
-  ctx.lineWidth = 1;
-  const count = 12;
+  ctx.globalAlpha = intensity * 0.25;
+  ctx.strokeStyle = "#aaccff";
+  ctx.lineWidth = 1.5;
+  const count = 18;
   for (let i = 0; i < count; i++) {
     const angle = dashDir + Math.PI + (Math.random() - 0.5) * 1.2;
     const dist = 40 + Math.random() * 80;
