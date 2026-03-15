@@ -1,14 +1,14 @@
 "use strict";
 
 import { W, H } from './config.js';
-import { initTouch, joystick, touchButtons, isTouchDevice, consumeTouchTap, setTouchTapCallback, setTouchMouseCallback } from './touch.js';
+import { initTouch, joystick, touchButtons, isTouchDevice, consumeTouchTap, setTouchTapCallback, setTouchMouseCallback, setTouchGameplayMode } from './touch.js';
 
 export const keys = {};
 export const mouse = { x: W / 2, y: H / 2, left: false, right: false };
 export let anyKeyPressed = false;
 export let mouseClicked = false;
 
-export { isTouchDevice, joystick, touchButtons, consumeTouchTap } from './touch.js';
+export { isTouchDevice, joystick, touchButtons, consumeTouchTap, setTouchGameplayMode } from './touch.js';
 
 export function consumeMouseClick() {
   const was = mouseClicked;
@@ -33,8 +33,19 @@ export function initInput(canvas) {
   document.addEventListener("keyup", e => { keys[e.key.toLowerCase()] = false; });
   canvas.addEventListener("mousemove", e => {
     const r = canvas.getBoundingClientRect();
-    mouse.x = (e.clientX - r.left) * (W / r.width);
-    mouse.y = (e.clientY - r.top) * (H / r.height);
+    // Account for object-fit: contain (letterboxing/pillarboxing)
+    const canvasAspect = W / H;
+    const elemAspect = r.width / r.height;
+    let renderW, renderH, offsetX, offsetY;
+    if (elemAspect > canvasAspect) {
+      renderH = r.height; renderW = r.height * canvasAspect;
+      offsetX = (r.width - renderW) / 2; offsetY = 0;
+    } else {
+      renderW = r.width; renderH = r.width / canvasAspect;
+      offsetX = 0; offsetY = (r.height - renderH) / 2;
+    }
+    mouse.x = ((e.clientX - r.left - offsetX) / renderW) * W;
+    mouse.y = ((e.clientY - r.top - offsetY) / renderH) * H;
   });
   canvas.addEventListener("mousedown", e => {
     e.preventDefault();
