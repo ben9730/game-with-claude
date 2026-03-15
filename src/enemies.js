@@ -4,7 +4,7 @@ import { PAL, RAMP, STATE } from './config.js';
 import { rand, dist, angle, angleDiff, lerp, moveWithCollision } from './utils.js';
 import { triggerShake } from './camera.js';
 import { spawnParticles, spawnDeathExplosion } from './particles.js';
-import { triggerHitStop, triggerSlowMo, triggerScreenFlash, triggerChroma, spawnDamageNumber } from './effects.js';
+import { triggerHitStop, triggerSlowMo, triggerScreenFlash, triggerChroma, spawnDamageNumber, triggerFreezeFrame } from './effects.js';
 import { player, damagePlayer } from './player.js';
 import { getRoomState, setDoorOpen, setDoorAnimState, setDoorAnimTimer } from './rooms.js';
 import { getGlobalTime, getStats, setGameState } from './main.js';
@@ -84,6 +84,9 @@ export function damageEnemy(e, amount) {
     if (e.type === "boss") {
       triggerSlowMo(0.2, 0.6);
       triggerChroma(6, 4);
+      triggerFreezeFrame(0.15, true);
+    } else {
+      triggerFreezeFrame(0.05, false);
     }
     if (e.type !== "boss" && Math.random() < 0.3) {
       const roll = Math.random();

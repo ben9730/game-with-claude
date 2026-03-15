@@ -1,10 +1,12 @@
 "use strict";
 
-import { TILE, PAL, RAMP, W, H } from './config.js';
+import { TILE, PAL, RAMP, W, H, CHARACTERS, CHARACTER_ORDER } from './config.js';
 import { player } from './player.js';
 import { getRoomState } from './rooms.js';
-import { getGlobalTime, getStats } from './main.js';
+import { getGlobalTime, getStats, getSelectedChar } from './main.js';
 import { drawHUDFrame } from './hud.js';
+import { drawSprite, drawSpriteWithGlow, isSpritesLoaded } from './sprites.js';
+import { mouse } from './input.js';
 
 // ============================================================
 // PRE-CACHED TITLE BACKGROUND (brick pattern)
@@ -331,13 +333,13 @@ export function drawTitle(ctx) {
   ctx.globalAlpha = flicker;
   ctx.fillStyle = PAL.textWhite;
   ctx.font = "16px monospace";
-  ctx.fillText("Press any key to begin", W / 2, 420);
+  ctx.fillText("Click or press any key to begin", W / 2, 420);
   ctx.globalAlpha = 1;
 
   // Controls
   ctx.fillStyle = PAL.textDim;
   ctx.font = "12px monospace";
-  ctx.fillText("WASD - Move  |  Mouse - Aim  |  LClick - Slash", W / 2, 480);
+  ctx.fillText("WASD/Arrows - Move  |  Mouse - Aim  |  LClick - Attack", W / 2, 480);
   ctx.fillText("RClick - Block  |  Space - Dash", W / 2, 500);
 
   ctx.fillStyle = RAMP.stone_wall[1];
@@ -424,7 +426,11 @@ export function drawGameOver(ctx) {
   ctx.globalAlpha = alpha;
   ctx.fillStyle = PAL.textWhite;
   ctx.font = "18px monospace";
-  ctx.fillText("Press R to return to the depths", W / 2, 430);
+  ctx.fillText("Press R to return to the depths", W / 2, 420);
+  ctx.globalAlpha = 1;
+  ctx.fillStyle = PAL.textDim;
+  ctx.font = "12px monospace";
+  ctx.fillText("(returns to character select)", W / 2, 442);
   ctx.globalAlpha = 1;
 }
 
@@ -518,4 +524,223 @@ export function drawVictory(ctx) {
   ctx.font = "16px monospace";
   ctx.fillText("Press R to play again", W / 2, 480);
   ctx.globalAlpha = 1;
+}
+
+// ============================================================
+// CHARACTER SELECT SCREEN
+// ============================================================
+let _charSelectBgCache = null;
+
+function buildCharSelectBg() {
+  const c = document.createElement("canvas");
+  c.width = W;
+  c.height = H;
+  const cx = c.getContext("2d");
+
+  // Dark dungeon background
+  cx.fillStyle = "#0a0610";
+  cx.fillRect(0, 0, W, H);
+
+  // Stone floor pattern
+  for (let y = 0; y < H; y += TILE) {
+    for (let x = 0; x < W; x += TILE) {
+      const brightness = Math.sin(x * 0.02 + y * 0.01) * 4;
+      const r = Math.max(0, Math.min(255, 14 + brightness));
+      const g = Math.max(0, Math.min(255, 10 + brightness));
+      const b = Math.max(0, Math.min(255, 18 + brightness));
+      cx.fillStyle = `rgb(${r|0},${g|0},${b|0})`;
+      cx.fillRect(x, y, TILE, TILE);
+
+      // Subtle tile grid
+      cx.fillStyle = "rgba(255,255,255,0.01)";
+      cx.fillRect(x, y, TILE, 1);
+      cx.fillRect(x, y, 1, TILE);
+    }
+  }
+
+  _charSelectBgCache = c;
+}
+
+export function drawCharSelect(ctx) {
+  const globalTime = getGlobalTime();
+  const selected = getSelectedChar();
+
+  // Draw cached background
+  if (!_charSelectBgCache) buildCharSelectBg();
+  ctx.drawImage(_charSelectBgCache, 0, 0);
+
+  // Vignette
+  const vg = ctx.createRadialGradient(W / 2, H / 2, 100, W / 2, H / 2, 420);
+  vg.addColorStop(0, "rgba(0,0,0,0)");
+  vg.addColorStop(0.6, "rgba(0,0,0,0.3)");
+  vg.addColorStop(1, "rgba(0,0,0,0.85)");
+  ctx.fillStyle = vg;
+  ctx.fillRect(0, 0, W, H);
+
+  // Title
+  ctx.textAlign = "center";
+  ctx.fillStyle = "#000000";
+  ctx.font = "bold 36px monospace";
+  ctx.fillText("CHOOSE YOUR HERO", W / 2 + 2, 82);
+  ctx.fillStyle = RAMP.gold[1];
+  ctx.fillText("CHOOSE YOUR HERO", W / 2, 80);
+  // Metallic highlight
+  ctx.globalAlpha = 0.3;
+  ctx.fillStyle = RAMP.gold[0];
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(0, 60, W, 12);
+  ctx.clip();
+  ctx.fillText("CHOOSE YOUR HERO", W / 2, 80);
+  ctx.restore();
+  ctx.globalAlpha = 1;
+
+  // Decorative line
+  ctx.fillStyle = RAMP.gold[3];
+  ctx.fillRect(W / 2 - 180, 95, 360, 2);
+  ctx.fillStyle = RAMP.gold[0];
+  ctx.fillRect(W / 2 - 180, 95, 360, 1);
+
+  // Character cards
+  const cardW = 140, cardH = 200, gap = 20;
+  const totalW = CHARACTER_ORDER.length * cardW + (CHARACTER_ORDER.length - 1) * gap;
+  const startX = (W - totalW) / 2;
+  const cardY = 130;
+
+  for (let i = 0; i < CHARACTER_ORDER.length; i++) {
+    const charKey = CHARACTER_ORDER[i];
+    const charDef = CHARACTERS[charKey];
+    const cx = startX + i * (cardW + gap);
+    const isSelected = charKey === selected;
+    const isHovered = mouse.x >= cx && mouse.x <= cx + cardW && mouse.y >= cardY && mouse.y <= cardY + cardH;
+
+    // Card background
+    const cardAlpha = isSelected ? 0.8 : (isHovered ? 0.5 : 0.3);
+    ctx.fillStyle = `rgba(20,15,30,${cardAlpha})`;
+    ctx.fillRect(cx, cardY, cardW, cardH);
+
+    // Card border
+    if (isSelected) {
+      // Glowing animated border
+      const pulse = 0.6 + Math.sin(globalTime * 4) * 0.2;
+      ctx.strokeStyle = charDef.glowColor;
+      ctx.lineWidth = 3;
+      ctx.globalAlpha = pulse;
+      ctx.strokeRect(cx - 1, cardY - 1, cardW + 2, cardH + 2);
+      ctx.globalAlpha = 1;
+
+      // Glow behind card
+      ctx.globalAlpha = 0.12;
+      const glow = ctx.createRadialGradient(cx + cardW / 2, cardY + 80, 10, cx + cardW / 2, cardY + 80, 80);
+      glow.addColorStop(0, charDef.glowColor);
+      glow.addColorStop(1, "rgba(0,0,0,0)");
+      ctx.fillStyle = glow;
+      ctx.fillRect(cx - 20, cardY - 20, cardW + 40, cardH + 40);
+      ctx.globalAlpha = 1;
+    } else if (isHovered) {
+      ctx.strokeStyle = "rgba(255,255,255,0.3)";
+      ctx.lineWidth = 1;
+      ctx.strokeRect(cx, cardY, cardW, cardH);
+    } else {
+      ctx.strokeStyle = "rgba(255,255,255,0.1)";
+      ctx.lineWidth = 1;
+      ctx.strokeRect(cx, cardY, cardW, cardH);
+    }
+
+    // Character sprite (animated)
+    const spriteX = cx + cardW / 2;
+    const spriteY = cardY + 65;
+    const bob = isSelected ? Math.sin(globalTime * 3) * 3 : 0;
+
+    if (isSpritesLoaded()) {
+      const animName = isSelected ? 'run' : 'idle';
+      if (isSelected) {
+        drawSpriteWithGlow(ctx, charDef.sprite, animName, globalTime, spriteX, spriteY + bob, false, null, charDef.glowColor);
+      } else {
+        drawSprite(ctx, charDef.sprite, animName, globalTime, spriteX, spriteY, false);
+      }
+    }
+
+    // Shadow under sprite
+    ctx.fillStyle = "rgba(0,0,0,0.3)";
+    ctx.beginPath();
+    ctx.ellipse(spriteX, spriteY + 22, 16, 5, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Character name
+    ctx.fillStyle = isSelected ? charDef.glowColor : PAL.textWhite;
+    ctx.font = isSelected ? "bold 14px monospace" : "14px monospace";
+    ctx.fillText(charDef.name, spriteX, cardY + 115);
+
+    // Weapon type
+    ctx.fillStyle = PAL.textDim;
+    ctx.font = "11px monospace";
+    ctx.fillText(charDef.weapon.toUpperCase(), spriteX, cardY + 132);
+
+    // Stat bars
+    const barX = cx + 15;
+    const barW = cardW - 30;
+    const barH = 6;
+    let barY = cardY + 145;
+
+    // HP bar
+    drawStatBar(ctx, barX, barY, barW, barH, charDef.hp / 140, "#cc3333", "HP");
+    barY += 16;
+    // Speed bar
+    drawStatBar(ctx, barX, barY, barW, barH, charDef.speed / 185, "#3388ff", "SPD");
+    barY += 16;
+    // Damage bar
+    drawStatBar(ctx, barX, barY, barW, barH, charDef.damage / 40, "#ffaa33", "ATK");
+  }
+
+  // Description of selected character
+  const selDef = CHARACTERS[selected];
+  ctx.fillStyle = PAL.textDim;
+  ctx.font = "13px monospace";
+  ctx.textAlign = "center";
+  ctx.fillText(selDef.desc, W / 2, cardY + cardH + 30);
+
+  // Special ability hint
+  const abilityHints = {
+    knight: "Shield blocks 80% damage (Right Click)",
+    wizard: "Fires magic bolts that pierce through (Left Click)",
+    elf: "Rapid arrows with long range (Left Click)",
+    lizard: "Wide axe sweep hits all nearby (Left Click)",
+  };
+  ctx.fillStyle = selDef.glowColor;
+  ctx.font = "12px monospace";
+  ctx.fillText(abilityHints[selected], W / 2, cardY + cardH + 52);
+
+  // Instructions
+  const flicker = 0.5 + Math.sin(globalTime * 3) * 0.15;
+  ctx.globalAlpha = flicker;
+  ctx.fillStyle = PAL.textWhite;
+  ctx.font = "16px monospace";
+  ctx.fillText("Click a hero or press Enter to begin", W / 2, 530);
+  ctx.globalAlpha = 1;
+
+  ctx.fillStyle = PAL.textDim;
+  ctx.font = "11px monospace";
+  ctx.fillText("A/D or Arrow Keys to browse", W / 2, 555);
+}
+
+function drawStatBar(ctx, x, y, w, h, pct, color, label) {
+  ctx.textAlign = "left";
+  ctx.fillStyle = PAL.textDim;
+  ctx.font = "9px monospace";
+  ctx.fillText(label, x, y - 1);
+
+  // Background
+  ctx.fillStyle = "rgba(255,255,255,0.06)";
+  ctx.fillRect(x, y, w, h);
+
+  // Fill
+  ctx.fillStyle = color;
+  ctx.fillRect(x, y, w * Math.min(1, pct), h);
+
+  // Highlight
+  ctx.fillStyle = "rgba(255,255,255,0.2)";
+  ctx.fillRect(x, y, w * Math.min(1, pct), 1);
+
+  ctx.textAlign = "center";
 }

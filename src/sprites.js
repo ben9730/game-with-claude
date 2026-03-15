@@ -25,8 +25,32 @@ const SPRITE_DEFS = {
     idle: { frames: 4, prefix: 'big_demon_idle_anim_f', speed: 0.15 },
     run: { frames: 4, prefix: 'big_demon_run_anim_f', speed: 0.1 },
   },
+  wizard: {
+    idle: { frames: 4, prefix: 'wizzard_m_idle_anim_f', speed: 0.15 },
+    run: { frames: 4, prefix: 'wizzard_m_run_anim_f', speed: 0.1 },
+    hit: { frames: 1, prefix: 'wizzard_m_hit_anim_f', speed: 0.1 },
+  },
+  elf: {
+    idle: { frames: 4, prefix: 'elf_m_idle_anim_f', speed: 0.15 },
+    run: { frames: 4, prefix: 'elf_m_run_anim_f', speed: 0.1 },
+    hit: { frames: 1, prefix: 'elf_m_hit_anim_f', speed: 0.1 },
+  },
+  lizard: {
+    idle: { frames: 4, prefix: 'lizard_m_idle_anim_f', speed: 0.15 },
+    run: { frames: 4, prefix: 'lizard_m_run_anim_f', speed: 0.1 },
+    hit: { frames: 1, prefix: 'lizard_m_hit_anim_f', speed: 0.1 },
+  },
   weapon_sword: {
     idle: { frames: 1, prefix: 'weapon_knight_sword', speed: 1, noIndex: true },
+  },
+  weapon_green_magic_staff: {
+    idle: { frames: 1, prefix: 'weapon_green_magic_staff', speed: 1, noIndex: true },
+  },
+  weapon_bow: {
+    idle: { frames: 1, prefix: 'weapon_bow', speed: 1, noIndex: true },
+  },
+  weapon_axe: {
+    idle: { frames: 1, prefix: 'weapon_axe', speed: 1, noIndex: true },
   },
   flask_red: {
     idle: { frames: 1, prefix: 'flask_big_red', speed: 1, noIndex: true },

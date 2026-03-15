@@ -1,7 +1,7 @@
 "use strict";
 
-import { W, H, PAL, STATE } from './config.js';
-import { keys, anyKeyPressed, setAnyKeyPressed, initInput } from './input.js';
+import { W, H, PAL, STATE, CHARACTERS, CHARACTER_ORDER } from './config.js';
+import { keys, anyKeyPressed, setAnyKeyPressed, initInput, mouse, consumeMouseClick } from './input.js';
 import { updateShake } from './camera.js';
 import { updateParticles, clearParticles } from './particles.js';
 import { generateRooms, loadRoom, getRoomState, setDoorAnimTimer, setDoorAnimState, setBossEntranceTimer, setBossEntranceActive, bakeRoomBackground } from './rooms.js';
@@ -11,13 +11,15 @@ import { updateEnemies } from './enemies.js';
 import { updateProjectiles } from './projectiles.js';
 import { updatePowerups } from './powerups.js';
 import { updateTransition } from './transitions.js';
-import { renderPlaying, renderGameOver, renderVictory, renderTitle } from './renderer.js';
+import { renderPlaying, renderGameOver, renderVictory, renderTitle, renderCharSelect } from './renderer.js';
 import {
   getHitStopFrames, consumeHitStop,
   getGameSpeed, updateGameSpeed,
   initAmbientMotes, updateAmbientMotes,
   initEmbers, updateEmbers,
   updateDamageNumbers,
+  updateRain, updateFogLayers,
+  getFreezeTimer, updateFreezeTimer,
 } from './effects.js';
 import { loadAllSprites } from './sprites.js';
 
@@ -35,11 +37,15 @@ canvas.height = H;
 let gameState = STATE.TITLE;
 let globalTime = 0;
 let stats = { enemiesKilled: 0, startTime: 0, roomsCleared: 0 };
+let selectedCharIndex = 0;
+let selectedChar = 'knight';
 
 export function getGameState() { return gameState; }
 export function setGameState(s) { gameState = s; }
 export function getGlobalTime() { return globalTime; }
 export function getStats() { return stats; }
+export function getSelectedChar() { return selectedChar; }
+export function getSelectedCharDef() { return CHARACTERS[selectedChar]; }
 
 // ============================================================
 // Initialize input
@@ -72,6 +78,9 @@ function startGame() {
   initEmbers(torches);
   gameState = STATE.PLAYING;
   setAnyKeyPressed(false);
+  consumeMouseClick();
+  // Prevent immediate attack on game start from the click that started the game
+  mouse.left = false;
 }
 
 // ============================================================
@@ -84,6 +93,23 @@ function gameLoop(timestamp) {
 
   globalTime += rawDt;
 
+  // Freeze frame: brief pause on significant events
+  if (getFreezeTimer() > 0) {
+    updateFreezeTimer(rawDt);
+    // Still render but don't update game logic
+    ctx.fillStyle = PAL.bg;
+    ctx.fillRect(0, 0, W, H);
+    switch (gameState) {
+      case STATE.TITLE: renderTitle(ctx); break;
+      case STATE.CHAR_SELECT: renderCharSelect(ctx); break;
+      case STATE.PLAYING: case STATE.TRANSITION: renderPlaying(ctx); break;
+      case STATE.GAMEOVER: renderGameOver(ctx); break;
+      case STATE.VICTORY: renderVictory(ctx); break;
+    }
+    requestAnimationFrame(gameLoop);
+    return;
+  }
+
   // Hit stop: skip game updates but still render
   if (getHitStopFrames() > 0) {
     consumeHitStop();
@@ -92,6 +118,7 @@ function gameLoop(timestamp) {
     ctx.fillRect(0, 0, W, H);
     switch (gameState) {
       case STATE.TITLE: renderTitle(ctx); break;
+      case STATE.CHAR_SELECT: renderCharSelect(ctx); break;
       case STATE.PLAYING: case STATE.TRANSITION: renderPlaying(ctx); break;
       case STATE.GAMEOVER: renderGameOver(ctx); break;
       case STATE.VICTORY: renderVictory(ctx); break;
@@ -109,15 +136,61 @@ function gameLoop(timestamp) {
   updateAmbientMotes(rawDt);
   updateEmbers(rawDt);
   updateDamageNumbers(rawDt);
+  updateRain(rawDt);
+  updateFogLayers(rawDt);
+  updateFreezeTimer(rawDt);
 
   // Update game logic
   switch (gameState) {
     case STATE.TITLE:
       if (anyKeyPressed) {
-        startGame();
+        gameState = STATE.CHAR_SELECT;
         setAnyKeyPressed(false);
+        consumeMouseClick();
+        // Clear keys that could pass through to char select
+        keys["enter"] = false;
+        keys[" "] = false;
+        mouse.left = false;
       }
       break;
+    case STATE.CHAR_SELECT: {
+      // Arrow keys / A/D to cycle characters
+      if (keys["arrowright"] || keys["d"]) {
+        keys["arrowright"] = false;
+        keys["d"] = false;
+        selectedCharIndex = (selectedCharIndex + 1) % CHARACTER_ORDER.length;
+        selectedChar = CHARACTER_ORDER[selectedCharIndex];
+      }
+      if (keys["arrowleft"] || keys["a"]) {
+        keys["arrowleft"] = false;
+        keys["a"] = false;
+        selectedCharIndex = (selectedCharIndex - 1 + CHARACTER_ORDER.length) % CHARACTER_ORDER.length;
+        selectedChar = CHARACTER_ORDER[selectedCharIndex];
+      }
+      // Click on character cards or press Enter/Space to confirm
+      if (keys["enter"] || keys[" "]) {
+        keys["enter"] = false;
+        keys[" "] = false;
+        startGame();
+      }
+      // Mouse click on character cards
+      if (consumeMouseClick()) {
+        const cardW = 140, cardH = 200, gap = 20;
+        const totalW = CHARACTER_ORDER.length * cardW + (CHARACTER_ORDER.length - 1) * gap;
+        const startX = (W - totalW) / 2;
+        const cardY = 130;
+        for (let i = 0; i < CHARACTER_ORDER.length; i++) {
+          const cx = startX + i * (cardW + gap);
+          if (mouse.x >= cx && mouse.x <= cx + cardW && mouse.y >= cardY && mouse.y <= cardY + cardH) {
+            selectedCharIndex = i;
+            selectedChar = CHARACTER_ORDER[i];
+            startGame();
+            break;
+          }
+        }
+      }
+      break;
+    }
     case STATE.PLAYING: {
       updatePlayer(dt);
       updateEnemies(dt);
@@ -153,7 +226,7 @@ function gameLoop(timestamp) {
       updateParticles(dt);
       if (keys["r"]) {
         keys["r"] = false;
-        startGame();
+        gameState = STATE.CHAR_SELECT;
       }
       break;
   }
@@ -165,6 +238,9 @@ function gameLoop(timestamp) {
   switch (gameState) {
     case STATE.TITLE:
       renderTitle(ctx);
+      break;
+    case STATE.CHAR_SELECT:
+      renderCharSelect(ctx);
       break;
     case STATE.PLAYING:
     case STATE.TRANSITION:

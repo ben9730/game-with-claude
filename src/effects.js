@@ -443,3 +443,166 @@ export function drawVignette(ctx) {
   }
   ctx.drawImage(_vignetteCanvas, 0, 0);
 }
+
+// ============================================================
+// SCREEN-SPACE RAIN — atmospheric dripping water in dungeon
+// ============================================================
+const rainDrops = [];
+const RAIN_COUNT = 60;
+let rainInited = false;
+
+function initRain() {
+  for (let i = 0; i < RAIN_COUNT; i++) {
+    rainDrops.push({
+      x: Math.random() * W,
+      y: Math.random() * H,
+      speed: 200 + Math.random() * 300,
+      length: 4 + Math.random() * 8,
+      alpha: 0.03 + Math.random() * 0.06,
+      drift: -10 + Math.random() * 20,
+    });
+  }
+  rainInited = true;
+}
+
+export function updateRain(dt) {
+  if (!rainInited) initRain();
+  for (const d of rainDrops) {
+    d.y += d.speed * dt;
+    d.x += d.drift * dt;
+    if (d.y > H) {
+      d.y = -d.length;
+      d.x = Math.random() * W;
+    }
+    if (d.x < 0) d.x = W;
+    if (d.x > W) d.x = 0;
+  }
+}
+
+export function drawRain(ctx) {
+  if (!rainInited) return;
+  ctx.save();
+  for (const d of rainDrops) {
+    ctx.globalAlpha = d.alpha;
+    ctx.strokeStyle = "#8899bb";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(d.x, d.y);
+    ctx.lineTo(d.x + d.drift * 0.02, d.y + d.length);
+    ctx.stroke();
+  }
+  ctx.globalAlpha = 1;
+  ctx.restore();
+}
+
+// ============================================================
+// SCROLLING FOG LAYERS — parallax atmospheric fog
+// ============================================================
+let _fogCanvas1 = null;
+let _fogCanvas2 = null;
+let fogOffset1 = 0;
+let fogOffset2 = 0;
+
+function buildFogLayer(alpha, scale) {
+  const c = document.createElement("canvas");
+  c.width = W;
+  c.height = H;
+  const cx = c.getContext("2d");
+  // Soft blob-based fog
+  for (let i = 0; i < 12; i++) {
+    const bx = Math.random() * W;
+    const by = Math.random() * H;
+    const br = 60 + Math.random() * 120;
+    const g = cx.createRadialGradient(bx, by, 0, bx, by, br * scale);
+    g.addColorStop(0, `rgba(100,90,130,${alpha})`);
+    g.addColorStop(1, "rgba(100,90,130,0)");
+    cx.fillStyle = g;
+    cx.fillRect(bx - br, by - br, br * 2, br * 2);
+  }
+  return c;
+}
+
+export function updateFogLayers(dt) {
+  fogOffset1 = (fogOffset1 + dt * 8) % W;
+  fogOffset2 = (fogOffset2 + dt * 14) % W;
+}
+
+export function drawFogLayers(ctx) {
+  if (!_fogCanvas1) _fogCanvas1 = buildFogLayer(0.025, 1.0);
+  if (!_fogCanvas2) _fogCanvas2 = buildFogLayer(0.018, 1.3);
+
+  ctx.drawImage(_fogCanvas1, fogOffset1, 0);
+  ctx.drawImage(_fogCanvas1, fogOffset1 - W, 0);
+  ctx.drawImage(_fogCanvas2, -fogOffset2, 0);
+  ctx.drawImage(_fogCanvas2, W - fogOffset2, 0);
+}
+
+// ============================================================
+// DITHERED TRANSITION — Bayer matrix dissolve instead of fade
+// ============================================================
+const BAYER_4x4 = [
+  [ 0/16,  8/16,  2/16, 10/16],
+  [12/16,  4/16, 14/16,  6/16],
+  [ 3/16, 11/16,  1/16,  9/16],
+  [15/16,  7/16, 13/16,  5/16],
+];
+
+export function drawDitherTransition(ctx, progress) {
+  if (progress <= 0) return;
+  const pixelSize = 4; // Size of each dither cell
+  ctx.fillStyle = "#000000";
+  for (let y = 0; y < H; y += pixelSize) {
+    for (let x = 0; x < W; x += pixelSize) {
+      const bx = (x / pixelSize) % 4;
+      const by = (y / pixelSize) % 4;
+      const threshold = BAYER_4x4[by][bx];
+      if (progress > threshold) {
+        ctx.fillRect(x, y, pixelSize, pixelSize);
+      }
+    }
+  }
+}
+
+// ============================================================
+// FREEZE FRAME — brief white flash + pause on significant kills
+// ============================================================
+let freezeTimer = 0;
+let freezeFlash = false;
+
+export function triggerFreezeFrame(duration, flash) {
+  freezeTimer = duration || 0.08;
+  freezeFlash = flash !== false;
+  if (freezeFlash) {
+    triggerScreenFlash("#ffffff", 0.4);
+  }
+}
+
+export function getFreezeTimer() { return freezeTimer; }
+export function updateFreezeTimer(dt) {
+  if (freezeTimer > 0) freezeTimer -= dt;
+}
+
+// ============================================================
+// SPEED LINES — radial lines during dash for motion feel
+// ============================================================
+export function drawSpeedLines(ctx, playerX, playerY, dashDir, intensity) {
+  if (intensity <= 0) return;
+  ctx.save();
+  ctx.globalAlpha = intensity * 0.15;
+  ctx.strokeStyle = "#ffffff";
+  ctx.lineWidth = 1;
+  const count = 12;
+  for (let i = 0; i < count; i++) {
+    const angle = dashDir + Math.PI + (Math.random() - 0.5) * 1.2;
+    const dist = 40 + Math.random() * 80;
+    const len = 15 + Math.random() * 30;
+    const sx = playerX + Math.cos(angle) * dist;
+    const sy = playerY + Math.sin(angle) * dist;
+    ctx.beginPath();
+    ctx.moveTo(sx, sy);
+    ctx.lineTo(sx + Math.cos(angle) * len, sy + Math.sin(angle) * len);
+    ctx.stroke();
+  }
+  ctx.globalAlpha = 1;
+  ctx.restore();
+}

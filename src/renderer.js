@@ -9,7 +9,7 @@ import { drawEnemy } from './enemies.js';
 import { player, drawPlayer } from './player.js';
 import { drawParticles } from './particles.js';
 import { drawHUD } from './hud.js';
-import { drawTitle, drawGameOver, drawVictory } from './title.js';
+import { drawTitle, drawGameOver, drawVictory, drawCharSelect } from './title.js';
 import { transitionAlpha } from './transitions.js';
 import { drawLightingOverlay, torches } from './lighting.js';
 import {
@@ -17,6 +17,7 @@ import {
   drawFilmGrain, drawScreenFlash, drawChroma,
   drawAmbientMotes, drawEmbers, drawDamageNumbers,
   drawGodRays, drawScanlines,
+  drawRain, drawFogLayers, drawDitherTransition, drawSpeedLines,
 } from './effects.js';
 import { getGlobalTime } from './main.js';
 
@@ -65,6 +66,11 @@ export function renderPlaying(ctx) {
   drawAmbientMotes(ctx);
   drawEmbers(ctx);
 
+  // === SPEED LINES during dash ===
+  if (player.dashing) {
+    drawSpeedLines(ctx, player.x, player.y, player.dashDir, 1.0);
+  }
+
   // === BOSS ENTRANCE EFFECTS (world-space) ===
   if (bossEntranceActive && bossEntranceTimer > 0) {
     const bt = bossEntranceTimer;
@@ -109,6 +115,10 @@ export function renderPlaying(ctx) {
   ctx.fillRect(0, 0, W, H);
   ctx.globalCompositeOperation = 'source-over';
 
+  // === ATMOSPHERIC SCREEN-SPACE ===
+  drawFogLayers(ctx);
+  drawRain(ctx);
+
   // drawFilmGrain(ctx); // Disabled for bright mode — invisible and wastes performance
   drawScanlines(ctx);
   drawScreenFlash(ctx);
@@ -123,10 +133,9 @@ export function renderPlaying(ctx) {
   // === UI LAYER ===
   drawHUD(ctx);
 
-  // === TRANSITION FADE ===
+  // === TRANSITION — dithered dissolve ===
   if (transitionAlpha > 0) {
-    ctx.fillStyle = `rgba(0,0,0,${transitionAlpha})`;
-    ctx.fillRect(0, 0, W, H);
+    drawDitherTransition(ctx, transitionAlpha);
   }
 }
 
@@ -161,4 +170,8 @@ export function renderVictory(ctx) {
 
 export function renderTitle(ctx) {
   drawTitle(ctx);
+}
+
+export function renderCharSelect(ctx) {
+  drawCharSelect(ctx);
 }

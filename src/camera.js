@@ -1,10 +1,18 @@
 "use strict";
 
+import { player } from './player.js';
+import { W, H } from './config.js';
+
 // Trauma-based camera shake — trauma² gives organic feel
 // Small hits barely shake, big hits shake violently
 
 export let shakeX = 0;
 export let shakeY = 0;
+
+// Smooth camera follow (lerp)
+export let camX = 0;
+export let camY = 0;
+const CAM_LERP = 6.0; // Higher = snappier follow
 
 let trauma = 0;
 const MAX_SHAKE = 12;
@@ -20,7 +28,21 @@ export function triggerShake(intensity, _duration) {
   addTrauma(intensity / 16);
 }
 
+export function resetCamera() {
+  camX = 0;
+  camY = 0;
+}
+
 export function updateShake(dt) {
+  // Smooth camera follow — lerp toward player offset from center
+  const targetX = 0; // Player is already centered by room layout
+  const targetY = 0;
+  camX += (targetX - camX) * CAM_LERP * dt;
+  camY += (targetY - camY) * CAM_LERP * dt;
+  // Round to avoid sub-pixel jitter on pixel art
+  camX = Math.round(camX * 2) / 2;
+  camY = Math.round(camY * 2) / 2;
+
   if (trauma > 0.001) {
     const t = performance.now() * 0.001;
     const shake = trauma * trauma * MAX_SHAKE;

@@ -9,8 +9,8 @@ import { triggerHitStop, triggerSlowMo, triggerScreenFlash, spawnDamageNumber } 
 import { getRoomState } from './rooms.js';
 import { damageEnemy } from './enemies.js';
 import { startTransition } from './transitions.js';
-import { getGameState, setGameState, getStats, getGlobalTime } from './main.js';
-import { TILE } from './config.js';
+import { getGameState, setGameState, getStats, getGlobalTime, getSelectedCharDef } from './main.js';
+import { TILE, CHARACTERS } from './config.js';
 import { drawSprite, drawSpriteFlash, drawSpriteWithGlow, drawEntityGlow, isSpritesLoaded } from './sprites.js';
 
 export const player = {
@@ -39,6 +39,19 @@ export const player = {
 };
 
 export function resetPlayer() {
+  const charDef = getSelectedCharDef();
+  player.maxHp = charDef.hp;
+  player.baseSpeed = charDef.speed;
+  player.baseDamage = charDef.damage;
+  player.attackRange = charDef.attackRange;
+  player.attackArc = charDef.attackArc;
+  player.attackDuration = charDef.attackDuration;
+  player.attackCooldownMax = charDef.attackCooldownMax;
+  player.hasShield = charDef.hasShield;
+  player.hasProjectile = charDef.hasProjectile;
+  player.charSprite = charDef.sprite;
+  player.glowColor = charDef.glowColor;
+
   player.hp = player.maxHp;
   player.speed = player.baseSpeed;
   player.damage = player.baseDamage;
@@ -105,6 +118,35 @@ function performSlash() {
   spawnSlashTrail(player.x, player.y, slashAngle, player.attackArc);
 }
 
+function firePlayerProjectile() {
+  const charDef = getSelectedCharDef();
+  const { projectiles } = getRoomState();
+  const speed = charDef.projectileSpeed || 350;
+  const vx = Math.cos(player.facing) * speed;
+  const vy = Math.sin(player.facing) * speed;
+  const isWizard = charDef.weapon === 'staff';
+
+  projectiles.push({
+    x: player.x + Math.cos(player.facing) * 16,
+    y: player.y + Math.sin(player.facing) * 16,
+    vx, vy,
+    radius: 5,
+    damage: player.damage,
+    life: 1.5,
+    color: charDef.projectileColor || "#ffffff",
+    trailColor: charDef.projectileTrail || charDef.projectileColor,
+    fromPlayer: true,
+    pierce: isWizard, // wizard bolts pierce
+    style: isWizard ? 'magic' : 'player_arrow',
+  });
+
+  spawnParticles(
+    player.x + Math.cos(player.facing) * 16,
+    player.y + Math.sin(player.facing) * 16,
+    3, charDef.projectileColor || "#ffffff", 40, 0.2, 2
+  );
+}
+
 export function updatePlayer(dt) {
   const { rooms, currentRoom, roomW, roomH, roomOffX, roomOffY, doorOpen, powerups } = getRoomState();
   const stats = getStats();
@@ -144,10 +186,14 @@ export function updatePlayer(dt) {
     player.scaleX = 1.2;
     player.scaleY = 0.85;
     player.squashTimer = 0.05;
-    performSlash();
+    if (player.hasProjectile) {
+      firePlayerProjectile();
+    } else {
+      performSlash();
+    }
   }
 
-  if (mouse.right && player.blockCooldown <= 0 && !player.blocking && !player.dashing) {
+  if (mouse.right && player.hasShield && player.blockCooldown <= 0 && !player.blocking && !player.dashing) {
     player.blocking = true;
     player.blockTimer = player.blockDuration;
     player.blockCooldown = player.blockCooldownMax + player.blockDuration;
@@ -166,10 +212,10 @@ export function updatePlayer(dt) {
     player.scaleX = 1.4;
     player.scaleY = 0.7;
     let dx = 0, dy = 0;
-    if (keys["w"]) dy -= 1;
-    if (keys["s"]) dy += 1;
-    if (keys["a"]) dx -= 1;
-    if (keys["d"]) dx += 1;
+    if (keys["w"] || keys["arrowup"]) dy -= 1;
+    if (keys["s"] || keys["arrowdown"]) dy += 1;
+    if (keys["a"] || keys["arrowleft"]) dx -= 1;
+    if (keys["d"] || keys["arrowright"]) dx += 1;
     if (dx === 0 && dy === 0) {
       player.dashDir = player.facing;
     } else {
@@ -186,10 +232,10 @@ export function updatePlayer(dt) {
     vy = Math.sin(player.dashDir) * player.dashSpeed;
     if (player.dashTimer <= 0) player.dashing = false;
   } else {
-    if (keys["w"]) vy -= 1;
-    if (keys["s"]) vy += 1;
-    if (keys["a"]) vx -= 1;
-    if (keys["d"]) vx += 1;
+    if (keys["w"] || keys["arrowup"]) vy -= 1;
+    if (keys["s"] || keys["arrowdown"]) vy += 1;
+    if (keys["a"] || keys["arrowleft"]) vx -= 1;
+    if (keys["d"] || keys["arrowright"]) vx += 1;
     const len = Math.hypot(vx, vy);
     if (len > 0) { vx /= len; vy /= len; }
     vx *= player.speed;
@@ -384,6 +430,222 @@ function buildPlayerSprite(flash) {
   return c;
 }
 
+// ============================================================
+// WEAPON DRAWING HELPERS
+// ============================================================
+
+function drawKnightSword(ctx, px, py, a, flash, globalTime) {
+  ctx.save();
+  ctx.translate(px, py);
+  ctx.rotate(a);
+  if (player.attacking) {
+    const swingT = 1 - player.attackTimer / player.attackDuration;
+    const swingAngle = -player.attackArc / 2 + player.attackArc * swingT;
+    ctx.rotate(swingAngle);
+    ctx.fillStyle = flash ? "#fff" : RAMP.steel[1];
+    ctx.fillRect(14, -2, 24, 4);
+    ctx.fillStyle = flash ? "#fff" : RAMP.steel[0];
+    ctx.fillRect(14, -2, 24, 1);
+    ctx.fillStyle = flash ? "#fff" : RAMP.steel[3];
+    ctx.fillRect(14, 1, 24, 1);
+    ctx.fillStyle = flash ? "#fff" : "#ffffff";
+    ctx.fillRect(36, -3, 3, 6);
+    ctx.fillStyle = flash ? "#fff" : RAMP.steel[0];
+    ctx.fillRect(37, -2, 2, 4);
+    ctx.fillStyle = flash ? "#fff" : RAMP.steel[2];
+    ctx.fillRect(18, 0, 14, 1);
+    ctx.fillStyle = flash ? "#fff" : RAMP.gold[3];
+    ctx.fillRect(12, -5, 4, 10);
+    ctx.fillStyle = flash ? "#fff" : RAMP.gold[1];
+    ctx.fillRect(12, -5, 4, 1);
+    if (!flash) { ctx.fillStyle = "#4466cc"; ctx.fillRect(13, -2, 2, 2); }
+    ctx.fillStyle = flash ? "#fff" : RAMP.gold[2];
+    ctx.fillRect(10, -3, 3, 6);
+    ctx.fillStyle = flash ? "#fff" : RAMP.gold[0];
+    ctx.fillRect(10, -3, 3, 1);
+    ctx.fillStyle = flash ? "#fff" : RAMP.leather[2];
+    ctx.fillRect(12, -4, 1, 2);
+    ctx.fillRect(12, 2, 1, 2);
+    ctx.globalAlpha = 0.25 * (1 - swingT);
+    ctx.fillStyle = PAL.slashTrail;
+    ctx.fillRect(14, -4, 26, 8);
+    ctx.globalAlpha = 0.1 * (1 - swingT);
+    ctx.fillStyle = "#8844cc";
+    ctx.fillRect(14, -6, 26, 12);
+    ctx.globalAlpha = 1;
+  } else {
+    ctx.fillStyle = flash ? "#fff" : RAMP.steel[1];
+    ctx.fillRect(14, -2, 22, 4);
+    ctx.fillStyle = flash ? "#fff" : RAMP.steel[0];
+    ctx.fillRect(14, -2, 22, 1);
+    ctx.fillStyle = flash ? "#fff" : RAMP.steel[3];
+    ctx.fillRect(14, 1, 22, 1);
+    ctx.fillStyle = flash ? "#fff" : "#ffffff";
+    ctx.fillRect(34, -3, 2, 6);
+    ctx.fillStyle = flash ? "#fff" : RAMP.steel[0];
+    ctx.fillRect(34, -2, 2, 4);
+    ctx.fillStyle = flash ? "#fff" : RAMP.steel[2];
+    ctx.fillRect(18, 0, 12, 1);
+    ctx.fillStyle = flash ? "#fff" : RAMP.gold[3];
+    ctx.fillRect(12, -5, 4, 10);
+    ctx.fillStyle = flash ? "#fff" : RAMP.gold[1];
+    ctx.fillRect(12, -5, 4, 1);
+    ctx.fillStyle = flash ? "#fff" : RAMP.gold[2];
+    ctx.fillRect(10, -3, 3, 6);
+    ctx.fillStyle = flash ? "#fff" : RAMP.gold[0];
+    ctx.fillRect(10, -3, 3, 1);
+  }
+  ctx.restore();
+}
+
+function drawKnightShield(ctx, px, py, a, flash, globalTime) {
+  if (player.blocking) {
+    ctx.save();
+    ctx.translate(px, py);
+    ctx.rotate(a);
+    ctx.fillStyle = flash ? "#fff" : PAL.shieldShadow;
+    ctx.fillRect(10, -12, 7, 24);
+    ctx.fillStyle = flash ? "#fff" : PAL.shield;
+    ctx.fillRect(11, -10, 5, 20);
+    ctx.fillStyle = flash ? "#fff" : PAL.shieldFace;
+    ctx.fillRect(11, -10, 2, 12);
+    ctx.fillStyle = flash ? "#fff" : RAMP.gold[1];
+    ctx.fillRect(12, -4, 3, 3);
+    ctx.fillRect(13, -6, 1, 7);
+    ctx.fillRect(11, -3, 5, 1);
+    if (!flash) { ctx.fillStyle = RAMP.gold[0]; ctx.fillRect(13, -6, 1, 1); }
+    ctx.fillStyle = flash ? "#fff" : PAL.shieldRim;
+    ctx.fillRect(10, -12, 1, 24);
+    ctx.fillRect(10, -12, 7, 1);
+    ctx.fillStyle = flash ? "#fff" : PAL.shieldShadow;
+    ctx.fillRect(16, -12, 1, 24);
+    ctx.fillRect(10, 11, 7, 1);
+    ctx.fillStyle = "rgba(100,180,240,0.2)";
+    ctx.fillRect(6, -16, 16, 32);
+    ctx.globalAlpha = 0.15 + Math.sin(globalTime * 12) * 0.1;
+    ctx.fillStyle = "#aaddff";
+    ctx.fillRect(10, -12, 7, 24);
+    ctx.globalAlpha = 1;
+    ctx.restore();
+  } else {
+    ctx.save();
+    ctx.translate(px, py);
+    ctx.rotate(a + 0.5);
+    ctx.fillStyle = flash ? "#fff" : PAL.shieldShadow;
+    ctx.fillRect(10, -7, 5, 14);
+    ctx.fillStyle = flash ? "#fff" : PAL.shield;
+    ctx.fillRect(11, -5, 3, 10);
+    ctx.fillStyle = flash ? "#fff" : PAL.shieldFace;
+    ctx.fillRect(11, -5, 1, 5);
+    ctx.fillStyle = flash ? "#fff" : PAL.shieldEmblem;
+    ctx.fillRect(12, -1, 1, 2);
+    ctx.restore();
+  }
+}
+
+function drawStaff(ctx, px, py, a, flash, globalTime) {
+  ctx.save();
+  ctx.translate(px, py);
+  ctx.rotate(a);
+  // Staff body
+  ctx.fillStyle = flash ? "#fff" : "#5a3a1a";
+  ctx.fillRect(10, -1, 28, 3);
+  // Staff top highlight
+  ctx.fillStyle = flash ? "#fff" : "#7a5a3a";
+  ctx.fillRect(10, -1, 28, 1);
+  // Orb at tip
+  if (!flash) {
+    const orbGlow = ctx.createRadialGradient(38, 0, 1, 38, 0, 8);
+    orbGlow.addColorStop(0, "#ffffff");
+    orbGlow.addColorStop(0.3, "#aa66ff");
+    orbGlow.addColorStop(0.7, "#6633cc");
+    orbGlow.addColorStop(1, "rgba(100,50,200,0)");
+    ctx.fillStyle = orbGlow;
+    ctx.fillRect(30, -8, 16, 16);
+  }
+  ctx.fillStyle = flash ? "#fff" : "#bb88ff";
+  ctx.fillRect(36, -3, 6, 6);
+  ctx.fillStyle = flash ? "#fff" : "#ffffff";
+  ctx.fillRect(37, -2, 4, 4);
+  ctx.fillStyle = flash ? "#fff" : "#ddbbff";
+  ctx.fillRect(38, -1, 2, 2);
+  // Grip wrappings
+  ctx.fillStyle = flash ? "#fff" : "#8855cc";
+  ctx.fillRect(14, -1, 2, 3);
+  ctx.fillRect(18, -1, 2, 3);
+  if (player.attacking) {
+    // Cast glow effect
+    const castT = 1 - player.attackTimer / player.attackDuration;
+    ctx.globalAlpha = 0.4 * (1 - castT);
+    ctx.fillStyle = "#aa66ff";
+    ctx.fillRect(30, -10, 20, 20);
+    ctx.globalAlpha = 1;
+  }
+  ctx.restore();
+}
+
+function drawBow(ctx, px, py, a, flash) {
+  ctx.save();
+  ctx.translate(px, py);
+  ctx.rotate(a);
+  // Bow body (curved using rects)
+  ctx.fillStyle = flash ? "#fff" : "#8a6a40";
+  ctx.fillRect(12, -12, 2, 24);
+  ctx.fillRect(14, -10, 2, 20);
+  // Bow tips
+  ctx.fillStyle = flash ? "#fff" : "#c0a070";
+  ctx.fillRect(11, -13, 3, 3);
+  ctx.fillRect(11, 10, 3, 3);
+  // String
+  ctx.fillStyle = flash ? "#fff" : "#cccccc";
+  ctx.fillRect(10, -12, 1, 24);
+  if (player.attacking) {
+    // String pulled back
+    const pullT = 1 - player.attackTimer / player.attackDuration;
+    const pullBack = 6 * (1 - pullT);
+    ctx.fillStyle = flash ? "#fff" : "#eeeeee";
+    ctx.fillRect(10 - pullBack, -1, pullBack, 2);
+  }
+  ctx.restore();
+}
+
+function drawAxe(ctx, px, py, a, flash) {
+  ctx.save();
+  ctx.translate(px, py);
+  ctx.rotate(a);
+  if (player.attacking) {
+    const swingT = 1 - player.attackTimer / player.attackDuration;
+    const swingAngle = -player.attackArc / 2 + player.attackArc * swingT;
+    ctx.rotate(swingAngle);
+  }
+  // Handle
+  ctx.fillStyle = flash ? "#fff" : "#6a5030";
+  ctx.fillRect(10, -1, 22, 3);
+  ctx.fillStyle = flash ? "#fff" : "#8a6a40";
+  ctx.fillRect(10, -1, 22, 1);
+  // Axe head
+  ctx.fillStyle = flash ? "#fff" : RAMP.steel[2];
+  ctx.fillRect(28, -8, 8, 16);
+  ctx.fillStyle = flash ? "#fff" : RAMP.steel[1];
+  ctx.fillRect(28, -8, 8, 3);
+  ctx.fillStyle = flash ? "#fff" : RAMP.steel[0];
+  ctx.fillRect(34, -6, 3, 12);
+  // Edge highlight
+  ctx.fillStyle = flash ? "#fff" : "#ffffff";
+  ctx.fillRect(36, -5, 1, 10);
+  // Blade shadow
+  ctx.fillStyle = flash ? "#fff" : RAMP.steel[3];
+  ctx.fillRect(28, 5, 8, 3);
+  if (player.attacking) {
+    const swingT = 1 - player.attackTimer / player.attackDuration;
+    ctx.globalAlpha = 0.2 * (1 - swingT);
+    ctx.fillStyle = "#ffaa44";
+    ctx.fillRect(28, -10, 12, 20);
+    ctx.globalAlpha = 1;
+  }
+  ctx.restore();
+}
+
 // Detailed player draw with pixel art techniques
 export function drawPlayer(ctx) {
   const px = Math.floor(player.x);
@@ -398,6 +660,7 @@ export function drawPlayer(ctx) {
 
   // ========== SPRITE-BASED RENDERING ==========
   if (isSpritesLoaded()) {
+    const charSprite = player.charSprite || 'knight';
     const animName = player.attacking ? 'hit' : (player.isMoving ? 'run' : 'idle');
     const flipH = Math.cos(player.facing) < 0;
     const animTime = player.isMoving ? player.walkTimer : globalTime;
@@ -408,7 +671,7 @@ export function drawPlayer(ctx) {
         const t = player.trail[i];
         const trailAlpha = 0.3 * (1 - i / player.trail.length);
         ctx.globalAlpha = trailAlpha;
-        drawSprite(ctx, 'knight', animName, animTime, t.x, t.y, flipH);
+        drawSprite(ctx, charSprite, animName, animTime, t.x, t.y, flipH);
       }
       ctx.globalAlpha = 1;
     }
@@ -427,10 +690,10 @@ export function drawPlayer(ctx) {
     ctx.translate(-(px), -(py + walkBob * 0.3));
 
     if (flash) {
-      drawSpriteFlash(ctx, 'knight', animName, animTime, px, py + walkBob * 0.3, flipH);
+      drawSpriteFlash(ctx, charSprite, animName, animTime, px, py + walkBob * 0.3, flipH);
     } else {
       // Draw with colored rim glow for visibility
-      drawSpriteWithGlow(ctx, 'knight', animName, animTime, px, py + walkBob * 0.3, flipH, null, "#ffffff");
+      drawSpriteWithGlow(ctx, charSprite, animName, animTime, px, py + walkBob * 0.3, flipH, null, player.glowColor || "#ffffff");
     }
 
     // Buff aura
@@ -458,125 +721,24 @@ export function drawPlayer(ctx) {
     ctx.globalAlpha = 1;
     ctx.restore();
 
-    // Sword (world-space, rotated to facing)
-    ctx.save();
-    ctx.translate(px, py);
-    ctx.rotate(a);
-
-    if (player.attacking) {
-      const swingT = 1 - player.attackTimer / player.attackDuration;
-      const swingAngle = -player.attackArc / 2 + player.attackArc * swingT;
-      ctx.rotate(swingAngle);
-      ctx.fillStyle = flash ? "#fff" : RAMP.steel[1];
-      ctx.fillRect(14, -2, 24, 4);
-      ctx.fillStyle = flash ? "#fff" : RAMP.steel[0];
-      ctx.fillRect(14, -2, 24, 1);
-      ctx.fillStyle = flash ? "#fff" : RAMP.steel[3];
-      ctx.fillRect(14, 1, 24, 1);
-      ctx.fillStyle = flash ? "#fff" : "#ffffff";
-      ctx.fillRect(36, -3, 3, 6);
-      ctx.fillStyle = flash ? "#fff" : RAMP.steel[0];
-      ctx.fillRect(37, -2, 2, 4);
-      ctx.fillStyle = flash ? "#fff" : RAMP.steel[2];
-      ctx.fillRect(18, 0, 14, 1);
-      ctx.fillStyle = flash ? "#fff" : RAMP.gold[3];
-      ctx.fillRect(12, -5, 4, 10);
-      ctx.fillStyle = flash ? "#fff" : RAMP.gold[1];
-      ctx.fillRect(12, -5, 4, 1);
-      if (!flash) {
-        ctx.fillStyle = "#4466cc";
-        ctx.fillRect(13, -2, 2, 2);
-      }
-      ctx.fillStyle = flash ? "#fff" : RAMP.gold[2];
-      ctx.fillRect(10, -3, 3, 6);
-      ctx.fillStyle = flash ? "#fff" : RAMP.gold[0];
-      ctx.fillRect(10, -3, 3, 1);
-      ctx.fillStyle = flash ? "#fff" : RAMP.leather[2];
-      ctx.fillRect(12, -4, 1, 2);
-      ctx.fillRect(12, 2, 1, 2);
-      ctx.globalAlpha = 0.25 * (1 - swingT);
-      ctx.fillStyle = PAL.slashTrail;
-      ctx.fillRect(14, -4, 26, 8);
-      ctx.globalAlpha = 0.1 * (1 - swingT);
-      ctx.fillStyle = "#8844cc";
-      ctx.fillRect(14, -6, 26, 12);
-      ctx.globalAlpha = 1;
-    } else {
-      ctx.fillStyle = flash ? "#fff" : RAMP.steel[1];
-      ctx.fillRect(14, -2, 22, 4);
-      ctx.fillStyle = flash ? "#fff" : RAMP.steel[0];
-      ctx.fillRect(14, -2, 22, 1);
-      ctx.fillStyle = flash ? "#fff" : RAMP.steel[3];
-      ctx.fillRect(14, 1, 22, 1);
-      ctx.fillStyle = flash ? "#fff" : "#ffffff";
-      ctx.fillRect(34, -3, 2, 6);
-      ctx.fillStyle = flash ? "#fff" : RAMP.steel[0];
-      ctx.fillRect(34, -2, 2, 4);
-      ctx.fillStyle = flash ? "#fff" : RAMP.steel[2];
-      ctx.fillRect(18, 0, 12, 1);
-      ctx.fillStyle = flash ? "#fff" : RAMP.gold[3];
-      ctx.fillRect(12, -5, 4, 10);
-      ctx.fillStyle = flash ? "#fff" : RAMP.gold[1];
-      ctx.fillRect(12, -5, 4, 1);
-      ctx.fillStyle = flash ? "#fff" : RAMP.gold[2];
-      ctx.fillRect(10, -3, 3, 6);
-      ctx.fillStyle = flash ? "#fff" : RAMP.gold[0];
-      ctx.fillRect(10, -3, 3, 1);
-    }
-    ctx.restore();
-
-    // Shield
-    if (player.blocking) {
-      ctx.save();
-      ctx.translate(px, py);
-      ctx.rotate(a);
-      ctx.fillStyle = flash ? "#fff" : PAL.shieldShadow;
-      ctx.fillRect(10, -12, 7, 24);
-      ctx.fillStyle = flash ? "#fff" : PAL.shield;
-      ctx.fillRect(11, -10, 5, 20);
-      ctx.fillStyle = flash ? "#fff" : PAL.shieldFace;
-      ctx.fillRect(11, -10, 2, 12);
-      ctx.fillStyle = flash ? "#fff" : RAMP.gold[1];
-      ctx.fillRect(12, -4, 3, 3);
-      ctx.fillRect(13, -6, 1, 7);
-      ctx.fillRect(11, -3, 5, 1);
-      if (!flash) {
-        ctx.fillStyle = RAMP.gold[0];
-        ctx.fillRect(13, -6, 1, 1);
-      }
-      ctx.fillStyle = flash ? "#fff" : PAL.shieldRim;
-      ctx.fillRect(10, -12, 1, 24);
-      ctx.fillRect(10, -12, 7, 1);
-      ctx.fillStyle = flash ? "#fff" : PAL.shieldShadow;
-      ctx.fillRect(16, -12, 1, 24);
-      ctx.fillRect(10, 11, 7, 1);
-      ctx.fillStyle = "rgba(100,180,240,0.2)";
-      ctx.fillRect(6, -16, 16, 32);
-      ctx.globalAlpha = 0.15 + Math.sin(globalTime * 12) * 0.1;
-      ctx.fillStyle = "#aaddff";
-      ctx.fillRect(10, -12, 7, 24);
-      ctx.globalAlpha = 1;
-      ctx.restore();
-    } else {
-      ctx.save();
-      ctx.translate(px, py);
-      ctx.rotate(a + 0.5);
-      ctx.fillStyle = flash ? "#fff" : PAL.shieldShadow;
-      ctx.fillRect(10, -7, 5, 14);
-      ctx.fillStyle = flash ? "#fff" : PAL.shield;
-      ctx.fillRect(11, -5, 3, 10);
-      ctx.fillStyle = flash ? "#fff" : PAL.shieldFace;
-      ctx.fillRect(11, -5, 1, 5);
-      ctx.fillStyle = flash ? "#fff" : PAL.shieldEmblem;
-      ctx.fillRect(12, -1, 1, 2);
-      ctx.restore();
+    // === WEAPON DRAWING (character-specific) ===
+    const charDef = getSelectedCharDef();
+    if (charDef.weapon === 'sword') {
+      drawKnightSword(ctx, px, py, a, flash, globalTime);
+      drawKnightShield(ctx, px, py, a, flash, globalTime);
+    } else if (charDef.weapon === 'staff') {
+      drawStaff(ctx, px, py, a, flash, globalTime);
+    } else if (charDef.weapon === 'bow') {
+      drawBow(ctx, px, py, a, flash);
+    } else if (charDef.weapon === 'axe') {
+      drawAxe(ctx, px, py, a, flash);
     }
 
     // Player warm light glow
     if (!iframeFlicker) {
       ctx.globalAlpha = 0.06;
       const plG = ctx.createRadialGradient(px, py, 5, px, py, 50);
-      plG.addColorStop(0, "#ffcc88");
+      plG.addColorStop(0, player.glowColor === "#9966ff" ? "#cc99ff" : "#ffcc88");
       plG.addColorStop(1, "rgba(255,200,120,0)");
       ctx.fillStyle = plG;
       ctx.fillRect(px - 50, py - 50, 100, 100);

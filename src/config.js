@@ -4,7 +4,89 @@ export const TILE = 32;
 export const W = 800;
 export const H = 600;
 
-export const STATE = { TITLE: 0, PLAYING: 1, GAMEOVER: 2, VICTORY: 3, TRANSITION: 4 };
+export const STATE = { TITLE: 0, PLAYING: 1, GAMEOVER: 2, VICTORY: 3, TRANSITION: 4, CHAR_SELECT: 5 };
+
+// ============================================================
+// CHARACTER CLASSES
+// ============================================================
+export const CHARACTERS = {
+  knight: {
+    name: "Knight",
+    desc: "Balanced warrior with sword & shield",
+    sprite: "knight",
+    weapon: "sword",
+    hp: 100,
+    speed: 150,
+    damage: 25,
+    attackRange: 38,
+    attackArc: Math.PI * 0.8,
+    attackDuration: 0.25,
+    attackCooldownMax: 0.4,
+    hasShield: true,
+    hasProjectile: false,
+    glowColor: "#ffffff",
+    weaponSprite: null, // uses drawn sword
+  },
+  wizard: {
+    name: "Wizard",
+    desc: "Arcane caster with piercing magic bolts",
+    sprite: "wizard",
+    weapon: "staff",
+    hp: 65,
+    speed: 135,
+    damage: 30,
+    attackRange: 250,
+    attackArc: Math.PI * 0.3,
+    attackDuration: 0.3,
+    attackCooldownMax: 0.55,
+    hasShield: false,
+    hasProjectile: true,
+    projectileSpeed: 350,
+    projectileColor: "#8855ff",
+    projectileTrail: "#aa88ff",
+    glowColor: "#9966ff",
+    weaponSprite: 'weapon_green_magic_staff',
+  },
+  elf: {
+    name: "Elf Ranger",
+    desc: "Swift archer with rapid arrows",
+    sprite: "elf",
+    weapon: "bow",
+    hp: 75,
+    speed: 185,
+    damage: 18,
+    attackRange: 300,
+    attackArc: Math.PI * 0.2,
+    attackDuration: 0.2,
+    attackCooldownMax: 0.3,
+    hasShield: false,
+    hasProjectile: true,
+    projectileSpeed: 450,
+    projectileColor: "#ddaa44",
+    projectileTrail: "#aa8833",
+    glowColor: "#44dd66",
+    weaponSprite: 'weapon_bow',
+  },
+  lizard: {
+    name: "Lizard",
+    desc: "Tough brute with devastating axe",
+    sprite: "lizard",
+    weapon: "axe",
+    hp: 140,
+    speed: 120,
+    damage: 40,
+    attackRange: 44,
+    attackArc: Math.PI * 1.0,
+    attackDuration: 0.35,
+    attackCooldownMax: 0.6,
+    hasShield: false,
+    hasProjectile: false,
+    glowColor: "#44cc44",
+    weaponSprite: 'weapon_axe',
+  },
+};
+
+export const CHARACTER_ORDER = ['knight', 'wizard', 'elf', 'lizard'];
 
 // ============================================================
 // PROFESSIONAL COLOR RAMPS (hue-shifted: shadows→cool, highlights→warm)
