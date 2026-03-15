@@ -165,12 +165,35 @@ export function drawEntityGlow(ctx, x, y, radius, color, alpha) {
   ctx.restore();
 }
 
+// Glow outline cache — avoids creating canvas every frame
+const glowCache = new Map();
+
+function getGlowCanvas(img, w, h, glowColor, cacheKey) {
+  const fullKey = cacheKey + '_glow_' + glowColor;
+  if (glowCache.has(fullKey)) return glowCache.get(fullKey);
+
+  const tmp = document.createElement('canvas');
+  tmp.width = w + 4;
+  tmp.height = h + 4;
+  const tctx = tmp.getContext('2d');
+  tctx.imageSmoothingEnabled = false;
+  tctx.drawImage(img, 2, 2, w, h);
+  tctx.globalCompositeOperation = 'source-atop';
+  tctx.fillStyle = glowColor;
+  tctx.fillRect(0, 0, tmp.width, tmp.height);
+  tctx.globalCompositeOperation = 'source-over';
+
+  glowCache.set(fullKey, tmp);
+  return tmp;
+}
+
 // Draw sprite with colored outline glow (rim light effect)
 export function drawSpriteWithGlow(ctx, spriteName, animName, time, x, y, flipH, scale, glowColor) {
   if (!allLoaded) return false;
   const key = getSpriteFrame(spriteName, animName, time);
   if (!key) return false;
-  const img = imageCache.get(flipH ? key + '_flip' : key);
+  const imgKey = flipH ? key + '_flip' : key;
+  const img = imageCache.get(imgKey);
   if (!img) return false;
 
   const s = (scale || SPRITE_SCALE);
@@ -181,20 +204,9 @@ export function drawSpriteWithGlow(ctx, spriteName, animName, time, x, y, flipH,
 
   ctx.imageSmoothingEnabled = false;
 
-  // Draw glow outline: sprite drawn at 4 offsets in glow color
+  // Draw glow outline using cached tinted canvas
   if (glowColor) {
-    // Create tinted version for glow
-    const tmp = document.createElement('canvas');
-    tmp.width = w + 4;
-    tmp.height = h + 4;
-    const tctx = tmp.getContext('2d');
-    tctx.imageSmoothingEnabled = false;
-    tctx.drawImage(img, 2, 2, w, h);
-    tctx.globalCompositeOperation = 'source-atop';
-    tctx.fillStyle = glowColor;
-    tctx.fillRect(0, 0, tmp.width, tmp.height);
-    tctx.globalCompositeOperation = 'source-over';
-
+    const tmp = getGlowCanvas(img, w, h, glowColor, imgKey);
     ctx.globalAlpha = 0.5;
     ctx.drawImage(tmp, dx - 2 - 1, dy - 2);
     ctx.drawImage(tmp, dx - 2 + 1, dy - 2);
@@ -288,12 +300,34 @@ export function loadTileImages() {
   });
 }
 
+// Flash canvas cache — avoids creating canvas every frame
+const flashCache = new Map();
+
+function getFlashCanvas(img, w, h, cacheKey) {
+  if (flashCache.has(cacheKey)) return flashCache.get(cacheKey);
+
+  const tmp = document.createElement('canvas');
+  tmp.width = w;
+  tmp.height = h;
+  const tctx = tmp.getContext('2d');
+  tctx.imageSmoothingEnabled = false;
+  tctx.drawImage(img, 0, 0, w, h);
+  tctx.globalCompositeOperation = 'source-atop';
+  tctx.fillStyle = '#ffffff';
+  tctx.fillRect(0, 0, w, h);
+  tctx.globalCompositeOperation = 'source-over';
+
+  flashCache.set(cacheKey, tmp);
+  return tmp;
+}
+
 // Draw sprite with white flash (damage effect)
 export function drawSpriteFlash(ctx, spriteName, animName, time, x, y, flipH, scale) {
   if (!allLoaded) return false;
   const key = getSpriteFrame(spriteName, animName, time);
   if (!key) return false;
-  const img = imageCache.get(flipH ? key + '_flip' : key);
+  const imgKey = flipH ? key + '_flip' : key;
+  const img = imageCache.get(imgKey);
   if (!img) return false;
 
   const s = (scale || SPRITE_SCALE);
@@ -303,21 +337,7 @@ export function drawSpriteFlash(ctx, spriteName, animName, time, x, y, flipH, sc
   const dy = Math.floor(y - h / 2);
 
   ctx.imageSmoothingEnabled = false;
-
-  // Draw to a temporary canvas to apply white flash via compositing
-  const tmp = document.createElement('canvas');
-  tmp.width = w;
-  tmp.height = h;
-  const tctx = tmp.getContext('2d');
-  tctx.imageSmoothingEnabled = false;
-  // Draw the sprite
-  tctx.drawImage(img, 0, 0, w, h);
-  // Flash white: fill white only where sprite pixels exist
-  tctx.globalCompositeOperation = 'source-atop';
-  tctx.fillStyle = '#ffffff';
-  tctx.fillRect(0, 0, w, h);
-  tctx.globalCompositeOperation = 'source-over';
-
+  const tmp = getFlashCanvas(img, w, h, imgKey + '_flash');
   ctx.drawImage(tmp, dx, dy);
   ctx.imageSmoothingEnabled = true;
   return true;

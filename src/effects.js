@@ -448,7 +448,7 @@ export function drawVignette(ctx) {
 // SCREEN-SPACE RAIN — atmospheric dripping water in dungeon
 // ============================================================
 const rainDrops = [];
-const RAIN_COUNT = 120;
+const RAIN_COUNT = 50;
 let rainInited = false;
 
 function initRain() {
@@ -458,7 +458,7 @@ function initRain() {
       y: Math.random() * H,
       speed: 250 + Math.random() * 350,
       length: 6 + Math.random() * 12,
-      alpha: 0.06 + Math.random() * 0.10,
+      alpha: 0.08 + Math.random() * 0.12,
       drift: -15 + Math.random() * 30,
     });
   }
@@ -481,16 +481,17 @@ export function updateRain(dt) {
 
 export function drawRain(ctx) {
   if (!rainInited) return;
+  // Batch all rain into a single path for performance
   ctx.save();
+  ctx.globalAlpha = 0.1;
+  ctx.strokeStyle = "#8899bb";
+  ctx.lineWidth = 1;
+  ctx.beginPath();
   for (const d of rainDrops) {
-    ctx.globalAlpha = d.alpha;
-    ctx.strokeStyle = "#8899bb";
-    ctx.lineWidth = 1;
-    ctx.beginPath();
     ctx.moveTo(d.x, d.y);
     ctx.lineTo(d.x + d.drift * 0.02, d.y + d.length);
-    ctx.stroke();
   }
+  ctx.stroke();
   ctx.globalAlpha = 1;
   ctx.restore();
 }
@@ -524,18 +525,13 @@ function buildFogLayer(alpha, scale) {
 }
 
 export function updateFogLayers(dt) {
-  fogOffset1 = (fogOffset1 + dt * 8) % W;
-  fogOffset2 = (fogOffset2 + dt * 14) % W;
+  fogOffset1 = (fogOffset1 + dt * 6) % W;
 }
 
 export function drawFogLayers(ctx) {
-  if (!_fogCanvas1) _fogCanvas1 = buildFogLayer(0.025, 1.0);
-  if (!_fogCanvas2) _fogCanvas2 = buildFogLayer(0.018, 1.3);
-
+  if (!_fogCanvas1) _fogCanvas1 = buildFogLayer(0.03, 1.2);
   ctx.drawImage(_fogCanvas1, fogOffset1, 0);
   ctx.drawImage(_fogCanvas1, fogOffset1 - W, 0);
-  ctx.drawImage(_fogCanvas2, -fogOffset2, 0);
-  ctx.drawImage(_fogCanvas2, W - fogOffset2, 0);
 }
 
 // ============================================================
