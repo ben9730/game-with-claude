@@ -6,7 +6,7 @@ import { getRoomState } from './rooms.js';
 import { getGlobalTime, getStats, getSelectedChar } from './main.js';
 import { drawHUDFrame } from './hud.js';
 import { drawSprite, drawSpriteWithGlow, isSpritesLoaded } from './sprites.js';
-import { mouse } from './input.js';
+import { mouse, isTouchDevice } from './input.js';
 
 // ============================================================
 // PRE-CACHED TITLE BACKGROUND (brick pattern)
@@ -333,14 +333,19 @@ export function drawTitle(ctx) {
   ctx.globalAlpha = flicker;
   ctx.fillStyle = PAL.textWhite;
   ctx.font = "16px monospace";
-  ctx.fillText("Click or press any key to begin", W / 2, 420);
+  ctx.fillText(isTouchDevice ? "Tap to begin" : "Click or press any key to begin", W / 2, 420);
   ctx.globalAlpha = 1;
 
   // Controls
   ctx.fillStyle = PAL.textDim;
   ctx.font = "12px monospace";
-  ctx.fillText("WASD/Arrows - Move  |  Mouse - Aim  |  LClick - Attack", W / 2, 480);
-  ctx.fillText("RClick - Block  |  Space - Dash", W / 2, 500);
+  if (isTouchDevice) {
+    ctx.fillText("Left Thumb - Move  |  ATK - Attack  |  DASH - Dodge", W / 2, 480);
+    ctx.fillText("BLK - Block (Knight)", W / 2, 500);
+  } else {
+    ctx.fillText("WASD/Arrows - Move  |  Mouse - Aim  |  LClick - Attack", W / 2, 480);
+    ctx.fillText("RClick - Block  |  Space - Dash", W / 2, 500);
+  }
 
   ctx.fillStyle = RAMP.stone_wall[1];
   ctx.font = "12px monospace";
@@ -426,7 +431,7 @@ export function drawGameOver(ctx) {
   ctx.globalAlpha = alpha;
   ctx.fillStyle = PAL.textWhite;
   ctx.font = "18px monospace";
-  ctx.fillText("Press R to return to the depths", W / 2, 420);
+  ctx.fillText(isTouchDevice ? "Tap to return to the depths" : "Press R to return to the depths", W / 2, 420);
   ctx.globalAlpha = 1;
   ctx.fillStyle = PAL.textDim;
   ctx.font = "12px monospace";
@@ -522,7 +527,7 @@ export function drawVictory(ctx) {
   ctx.globalAlpha = alpha;
   ctx.fillStyle = PAL.textWhite;
   ctx.font = "16px monospace";
-  ctx.fillText("Press R to play again", W / 2, 480);
+  ctx.fillText(isTouchDevice ? "Tap to play again" : "Press R to play again", W / 2, 480);
   ctx.globalAlpha = 1;
 }
 
@@ -716,12 +721,14 @@ export function drawCharSelect(ctx) {
   ctx.globalAlpha = flicker;
   ctx.fillStyle = PAL.textWhite;
   ctx.font = "16px monospace";
-  ctx.fillText("Click a hero or press Enter to begin", W / 2, 530);
+  ctx.fillText(isTouchDevice ? "Tap a hero to begin" : "Click a hero or press Enter to begin", W / 2, 530);
   ctx.globalAlpha = 1;
 
-  ctx.fillStyle = PAL.textDim;
-  ctx.font = "11px monospace";
-  ctx.fillText("A/D or Arrow Keys to browse", W / 2, 555);
+  if (!isTouchDevice) {
+    ctx.fillStyle = PAL.textDim;
+    ctx.font = "11px monospace";
+    ctx.fillText("A/D or Arrow Keys to browse", W / 2, 555);
+  }
 }
 
 function drawStatBar(ctx, x, y, w, h, pct, color, label) {

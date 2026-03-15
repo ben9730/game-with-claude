@@ -1,7 +1,8 @@
 "use strict";
 
 import { W, H, PAL, STATE, CHARACTERS, CHARACTER_ORDER } from './config.js';
-import { keys, anyKeyPressed, setAnyKeyPressed, initInput, mouse, consumeMouseClick } from './input.js';
+import { keys, anyKeyPressed, setAnyKeyPressed, initInput, mouse, consumeMouseClick, isTouchDevice, consumeTouchTap, joystick } from './input.js';
+import { drawTouchControls } from './touch.js';
 import { updateShake } from './camera.js';
 import { updateParticles, clearParticles } from './particles.js';
 import { generateRooms, loadRoom, getRoomState, setDoorAnimTimer, setDoorAnimState, setBossEntranceTimer, setBossEntranceActive, bakeRoomBackground } from './rooms.js';
@@ -79,7 +80,8 @@ function startGame() {
   gameState = STATE.PLAYING;
   setAnyKeyPressed(false);
   consumeMouseClick();
-  // Prevent immediate attack on game start from the click that started the game
+  consumeTouchTap();
+  // Prevent immediate attack on game start from the click/tap that started the game
   mouse.left = false;
 }
 
@@ -143,10 +145,11 @@ function gameLoop(timestamp) {
   // Update game logic
   switch (gameState) {
     case STATE.TITLE:
-      if (anyKeyPressed) {
+      if (anyKeyPressed || consumeTouchTap()) {
         gameState = STATE.CHAR_SELECT;
         setAnyKeyPressed(false);
         consumeMouseClick();
+        consumeTouchTap();
         // Clear keys that could pass through to char select
         keys["enter"] = false;
         keys[" "] = false;
@@ -173,15 +176,18 @@ function gameLoop(timestamp) {
         keys[" "] = false;
         startGame();
       }
-      // Mouse click on character cards
-      if (consumeMouseClick()) {
+      // Mouse click or touch tap on character cards
+      const clickPos = consumeMouseClick() ? mouse : null;
+      const tapPos = consumeTouchTap();
+      const hitPos = clickPos || tapPos;
+      if (hitPos) {
         const cardW = 140, cardH = 200, gap = 20;
         const totalW = CHARACTER_ORDER.length * cardW + (CHARACTER_ORDER.length - 1) * gap;
         const startX = (W - totalW) / 2;
         const cardY = 130;
         for (let i = 0; i < CHARACTER_ORDER.length; i++) {
           const cx = startX + i * (cardW + gap);
-          if (mouse.x >= cx && mouse.x <= cx + cardW && mouse.y >= cardY && mouse.y <= cardY + cardH) {
+          if (hitPos.x >= cx && hitPos.x <= cx + cardW && hitPos.y >= cardY && hitPos.y <= cardY + cardH) {
             selectedCharIndex = i;
             selectedChar = CHARACTER_ORDER[i];
             startGame();
@@ -224,7 +230,7 @@ function gameLoop(timestamp) {
     case STATE.GAMEOVER:
     case STATE.VICTORY:
       updateParticles(dt);
-      if (keys["r"]) {
+      if (keys["r"] || consumeTouchTap()) {
         keys["r"] = false;
         gameState = STATE.CHAR_SELECT;
       }
@@ -252,6 +258,12 @@ function gameLoop(timestamp) {
     case STATE.VICTORY:
       renderVictory(ctx);
       break;
+  }
+
+  // Draw touch controls overlay during gameplay
+  if (isTouchDevice && (gameState === STATE.PLAYING || gameState === STATE.TRANSITION)) {
+    const charDef = CHARACTERS[selectedChar];
+    drawTouchControls(ctx, charDef.hasShield);
   }
 
   requestAnimationFrame(gameLoop);

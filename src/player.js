@@ -2,7 +2,7 @@
 
 import { PAL, RAMP, STATE } from './config.js';
 import { angle, angleDiff, dist, moveWithCollision } from './utils.js';
-import { keys, mouse } from './input.js';
+import { keys, mouse, isTouchDevice, joystick, touchButtons } from './input.js';
 import { triggerShake } from './camera.js';
 import { spawnParticles, spawnBlood, spawnSlashTrail, spawnMagicSparkle } from './particles.js';
 import { triggerHitStop, triggerSlowMo, triggerScreenFlash, spawnDamageNumber } from './effects.js';
@@ -151,7 +151,27 @@ export function updatePlayer(dt) {
   const { rooms, currentRoom, roomW, roomH, roomOffX, roomOffY, doorOpen, powerups } = getRoomState();
   const stats = getStats();
 
-  player.facing = angle(player, mouse);
+  // Facing: on touch, face joystick direction or nearest enemy; on desktop, face mouse
+  if (isTouchDevice) {
+    if (joystick.active && (joystick.dx !== 0 || joystick.dy !== 0)) {
+      player.facing = Math.atan2(joystick.dy, joystick.dx);
+    } else {
+      // Auto-aim toward nearest enemy when not moving
+      const { enemies } = getRoomState();
+      let nearest = null, nearDist = Infinity;
+      for (const e of enemies) {
+        if (e.dead) continue;
+        const d = dist(player, e);
+        if (d < nearDist) { nearDist = d; nearest = e; }
+      }
+      if (nearest && nearDist < 200) {
+        player.facing = angle(player, nearest);
+      }
+      // else keep last facing
+    }
+  } else {
+    player.facing = angle(player, mouse);
+  }
 
   if (player.speedBuff > 0) {
     player.speedBuff -= dt;
@@ -178,7 +198,8 @@ export function updatePlayer(dt) {
       player.attacking = false;
     }
   }
-  if (mouse.left && !player.attacking && player.attackCooldown <= 0 && !player.dashing) {
+  const wantsAttack = mouse.left || touchButtons.attack;
+  if (wantsAttack && !player.attacking && player.attackCooldown <= 0 && !player.dashing) {
     player.attacking = true;
     player.attackTimer = player.attackDuration;
     player.attackCooldown = player.attackCooldownMax;
@@ -193,7 +214,8 @@ export function updatePlayer(dt) {
     }
   }
 
-  if (mouse.right && player.hasShield && player.blockCooldown <= 0 && !player.blocking && !player.dashing) {
+  const wantsBlock = mouse.right || touchButtons.block;
+  if (wantsBlock && player.hasShield && player.blockCooldown <= 0 && !player.blocking && !player.dashing) {
     player.blocking = true;
     player.blockTimer = player.blockDuration;
     player.blockCooldown = player.blockCooldownMax + player.blockDuration;
@@ -203,7 +225,8 @@ export function updatePlayer(dt) {
     if (player.blockTimer <= 0) player.blocking = false;
   }
 
-  if (keys[" "] && player.dashCooldown <= 0 && !player.dashing) {
+  const wantsDash = keys[" "] || touchButtons.dash;
+  if (wantsDash && player.dashCooldown <= 0 && !player.dashing) {
     player.dashing = true;
     player.dashTimer = player.dashDuration;
     player.dashCooldown = player.dashCooldownMax;
@@ -216,6 +239,7 @@ export function updatePlayer(dt) {
     if (keys["s"] || keys["arrowdown"]) dy += 1;
     if (keys["a"] || keys["arrowleft"]) dx -= 1;
     if (keys["d"] || keys["arrowright"]) dx += 1;
+    if (joystick.active) { dx += joystick.dx; dy += joystick.dy; }
     if (dx === 0 && dy === 0) {
       player.dashDir = player.facing;
     } else {
@@ -232,10 +256,16 @@ export function updatePlayer(dt) {
     vy = Math.sin(player.dashDir) * player.dashSpeed;
     if (player.dashTimer <= 0) player.dashing = false;
   } else {
+    // Keyboard movement
     if (keys["w"] || keys["arrowup"]) vy -= 1;
     if (keys["s"] || keys["arrowdown"]) vy += 1;
     if (keys["a"] || keys["arrowleft"]) vx -= 1;
     if (keys["d"] || keys["arrowright"]) vx += 1;
+    // Touch joystick movement
+    if (joystick.active) {
+      vx += joystick.dx;
+      vy += joystick.dy;
+    }
     const len = Math.hypot(vx, vy);
     if (len > 0) { vx /= len; vy /= len; }
     vx *= player.speed;

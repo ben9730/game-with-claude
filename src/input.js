@@ -1,11 +1,14 @@
 "use strict";
 
 import { W, H } from './config.js';
+import { initTouch, joystick, touchButtons, isTouchDevice, consumeTouchTap, setTouchTapCallback, setTouchMouseCallback } from './touch.js';
 
 export const keys = {};
 export const mouse = { x: W / 2, y: H / 2, left: false, right: false };
 export let anyKeyPressed = false;
 export let mouseClicked = false;
+
+export { isTouchDevice, joystick, touchButtons, consumeTouchTap } from './touch.js';
 
 export function consumeMouseClick() {
   const was = mouseClicked;
@@ -43,4 +46,9 @@ export function initInput(canvas) {
     if (e.button === 2) mouse.right = false;
   });
   canvas.addEventListener("contextmenu", e => e.preventDefault());
+
+  // Initialize touch controls
+  initTouch(canvas);
+  setTouchTapCallback(() => { anyKeyPressed = true; mouseClicked = true; });
+  setTouchMouseCallback((x, y) => { mouse.x = x; mouse.y = y; });
 }
